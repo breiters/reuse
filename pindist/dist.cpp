@@ -1,3 +1,4 @@
+
 /* Calculation of a Stack Reuse Distance Histogram
  *
  * (C) 2015, Josef Weidendorfer / LRR-TUM
@@ -6,62 +7,124 @@
 
 
 #include "dist.h"
+#include "ds.hpp"
 
-#include <iostream>
-#include <stdio.h>
-#include <list>
-#include <vector>
-#include <unordered_map>
-#include <cassert>
 #include <algorithm>
+// #include <bits/charconv.h>
+#include <cassert>
+#include <iostream>
+#include <list>
+#include <stdio.h>
+#include <unordered_map>
+#include <vector>
 
 using namespace std;
-
-// Assertions and consistency check?
-#define RD_DEBUG 0
-
-// 2: Huge amount of debug output, 1: checks, 0: silent
-#define RD_VERBOSE 0
-
-// use minimal memory block element? Prohibits consistency checks
-#define MIN_BLOCKSTRUCT 1
-
 
 //-------------------------------------------------------------------------
 // Stack structure with MemoryBlock as element
 
-#if MIN_BLOCKSTRUCT
-class MemoryBlock {
-public:
-  MemoryBlock(Addr a) { bucket = 0; } // generated on first access
-  void print(char* b)
-    { sprintf(b, "block at bucket %d", bucket); }
-  void incACount() {}
-  unsigned long getACount() { return 1; }
-
-  int bucket;
-};
-#else
-class MemoryBlock {
-public:
-  MemoryBlock(Addr a)
-    { addr = a; bucket = 0; aCount = 1; } // generated on first access
-  void print(char* b)
-    { sprintf(b, "block %p, bucket %d, aCount %lu", addr, bucket, aCount); }
-  void incACount() { aCount++; }
-  unsigned long getACount() { return aCount; }
-
-  int bucket;
-
-private:
-  Addr addr;
-  unsigned long aCount;
-};
-#endif
-
 list<MemoryBlock> stack;
 
+typedef list<MemoryBlock>::iterator Marker;
 
+vector<datastruct_info> datastructs;
+
+vector<Bucket> buckets;
+int nextBucket; // when stack is growing, we may enter this bucket
+
+unordered_map<Addr,list<MemoryBlock>::iterator> addrMap;
+
+#if MIN_BLOCKSTRUCT
+MemoryBlock::MemoryBlock(Addr a) : bucket{0}, ds_num{0} {}// generated on first access
+MemoryBlock::MemoryBlock(Addr a, int num) : bucket{0}, ds_num{num} {}
+#else
+
+#endif
+
+Bucket::Bucket(int m)  {
+    aCount = 0;
+    min = m;
+    marker = stack.end();
+}
+
+void Bucket::register_datastruct() {
+    ds_aCount.push_back(0);
+    ds_aCount_excl.push_back(0);
+    ds_markers_excl.push_back(marker); // TODO
+}
+
+void Bucket::on_datastruct_get_active(int ds_num, list<MemoryBlock>::iterator stack_pos) { }
+
+void register_datastruct(datastruct_info &info) {
+  datastructs.push_back(info);
+  for(auto &bucket : buckets) {
+    bucket.register_datastruct();
+    // assert(bucket.ds_aCount.size() == datastructs.size());
+    // assert(bucket.ds_markers_excl.size() == datastructs.size());
+  }
+}
+
+int get_ds_num(Addr addr)
+   {
+     int i = 0;
+     for(auto &ds : datastructs) {
+       if((ADDRINT)addr >= (ADDRINT)ds.address && (ADDRINT)addr < (ADDRINT)ds.address + (ADDRINT)ds.nbytes - 1) {
+        //  printf("datastructure accessed:\n");
+        //  ds.print();
+         return i;
+       }
+       i++;
+     }
+     return -1;
+   }
+
+/*
+   void add_bucket(uint min) {
+     assert(buckets.size() > 2);
+     assert(buckets[buckets.size()-2].min < min);
+     buckets.insert( buckets.end()-1, Bucket(min) );
+   }
+
+   void move_markers(int topBucket) {
+    //  for(auto bucket : buckets.)
+    for(int b=1; b<topBucket; b++) {
+      --buckets.at(b).marker;
+      (buckets.at(b).marker)->bucket++;
+      if (RD_DEBUG)
+        assert( (buckets[b].marker)->bucket == b );
+    }
+   }
+
+   bool last_bucket_reached() {
+     return buckets[nextBucket].min == 0;
+   }
+
+   uint next_bucket_capacity() {
+     return buckets[nextBucket].min;
+   }
+
+   void activate_next_bucket() {
+
+   if (RD_VERBOSE >0)
+    fprintf(stderr," ACTIVATE bucket %d (next bucket minimum depth %d)\n",
+	    nextBucket, buckets[nextBucket+1].min);
+
+  --buckets[nextBucket].marker; // set marker to last entry
+  (buckets[nextBucket].marker)->bucket++; 
+  if (RD_DEBUG)
+    assert( (buckets[nextBucket].marker)->bucket == nextBucket );
+
+  nextBucket++;
+
+   }
+   */
+
+  //  int nextBucket() { return nextBucket; }
+
+// TODO: refactor ...
+#include "ds.cpp"
+
+#if FUTURE_IMPROVED_HASH
 //-------------------------------------------------------------------------
 // Specialization of unordered_map to use masking for bucket calculation
 struct _Mod_myrange_hashing
@@ -73,7 +136,8 @@ struct _Mod_myrange_hashing
     static std::size_t mask;
 
     _Mod_myrange_hashing() {}
-    _Mod_myrange_hashing(const __detail::_Mod_range_hashing &temp) {}
+    // ??
+    // _Mod_myrange_hashing(const __detail::_Mod_range_hashing &temp) {} 
 
     result_type
     operator()(first_argument_type __num,
@@ -99,11 +163,14 @@ struct _Mod_myrange_hashing
 
 std::size_t _Mod_myrange_hashing::mask = 1;
 
+// ?
+/*
 namespace std {
 template<typename _Alloc,
 	 typename _ExtractKey, typename _Equal,
 	 typename _H1, typename _Hash,
 	 typename _RehashPolicy, typename _Traits>
+
 class _Hashtable<Addr,  std::pair<const Addr, list<MemoryBlock>::iterator>,
 	_Alloc,_ExtractKey, _Equal,
 	_H1, __detail::_Mod_range_hashing, _Hash,
@@ -123,31 +190,15 @@ public:
     using mySizeType = typename myBase::size_type;
 };
 }
+*/
 //-------------------------------------------------------------------------
-
-
-class Bucket {
-public:
-  Bucket(int m)  {
-    aCount = 0;
-    min = m;
-    marker = stack.end();
-  }
-  unsigned long aCount;
-  unsigned int min;
-  list<MemoryBlock>::iterator marker;
-};
-
-
-vector<Bucket> buckets;
-int nextBucket; // when stack is growing, we may enter this bucket
-
-unordered_map<Addr,list<MemoryBlock>::iterator> addrMap;
+#endif
 
 void RD_init(int min1)
 {
   stack.clear();
   addrMap.clear();
+  datastructs.clear();
   //addrMap.rehash(4000000);
 
   buckets.clear();
@@ -165,6 +216,7 @@ void RD_addBucket(unsigned int min)
   //   min, buckets[buckets.size()-2].min);
   assert(buckets.size() > 2);
   assert(buckets[buckets.size()-2].min < min);
+
   buckets.insert( buckets.end()-1, Bucket(min) );
 }
 
@@ -220,7 +272,6 @@ void RD_checkConsistency()
 }
 
 
-
 void moveMarkers(int topBucket)
 {
   for(int b=1; b<=topBucket; b++) {
@@ -233,8 +284,9 @@ void moveMarkers(int topBucket)
 
 void handleNewBlock(Addr a)
 {
+  int ds_num = get_ds_num(a);
   // new memory block
-  stack.push_front( MemoryBlock(a) );
+  stack.push_front( MemoryBlock(a, ds_num) );
   addrMap[a] = stack.begin();
 
   if (RD_VERBOSE >1)
@@ -267,7 +319,10 @@ void moveBlockToTop(Addr a, list<MemoryBlock>::iterator blockIt, int bucket)
   moveMarkers(bucket);
 
   // move element pointed to by blockIt to beginning of list
-  stack.splice(stack.begin(), stack, blockIt);
+  stack.splice(stack.begin(), stack, blockIt); // TODO
+  // stack.remove(blockIt);
+  // stack.insert(blockIt);
+
   blockIt->incACount();
   blockIt->bucket = 0;
 
@@ -303,7 +358,17 @@ void RD_accessBlock(Addr a)
     }
   }
 
+  // global access count
   buckets[bucket].aCount++;
+
+  // access count to datastructure
+  int ds_num = get_ds_num(a);
+  if(ds_num > -1) {
+    // printf("ds_num: %d %d %d %d\n", ds_num, (int)datastructs.size(), (int)buckets[bucket].ds_aCount.size(), bucket);
+    assert((int) datastructs.size() >= ds_num - 1);
+    assert(buckets[bucket].ds_aCount.size() == datastructs.size());
+    buckets[bucket].ds_aCount[ds_num]++;
+  }
 
   if (RD_DEBUG) {
     // run consistency check every 10 million invocations
@@ -318,7 +383,7 @@ void RD_accessBlock(Addr a)
 
 
 // get statistics
-void RD_stat(unsigned long & stack_size, unsigned long & accessCount)
+void RD_stat(unsigned long & stack_size, unsigned long & accessCount) //, vector<unsigned long> )
 {
   if (RD_DEBUG)
     RD_checkConsistency();
@@ -343,6 +408,18 @@ int RD_get_hist(unsigned int b,
   assert((b>=0) && (b < buckets.size()));
   min = buckets[b].min;
   accessCount = buckets[b].aCount;
+  if (b == buckets.size()-1) return 0;
+  return b+1;
+}
+
+int RD_get_hist_ds(int ds_num, unsigned int b,
+		unsigned int & min, unsigned long & accessCount)
+{
+  //if (RD_DEBUG) RD_checkConsistency();
+
+  assert((b>=0) && (b < buckets.size()));
+  min = buckets[b].min;
+  accessCount = buckets[b].ds_aCount[ds_num];
   if (b == buckets.size()-1) return 0;
   return b+1;
 }
@@ -436,6 +513,38 @@ void RD_printHistogram(FILE* out, const char* pStr, int blockSize)
 	    formatBar(aCount, maxCount, 60));
     b = bNext;
   } while(b!=0);
+
+int ds_num = 0;
+  for (auto ds : datastructs)
+{
+  ds.print();
+
+  bNext = RD_get_hist_ds(ds_num, 0, min, aCount);
+  fprintf(out, "%s[%8.3f MB ..] %s ==>\n",
+	  pStr, (double)(min * blockSize)/1000000.0,
+	  formatLong(aCount,aCount));
+  b = bNext;
+  do {
+    bNext = RD_get_hist_ds(ds_num, b, min, aCount);
+    if ((b>maxNonEmptyBucket) && (aCount == 0)) {
+      b = bNext;
+      continue;
+    }
+
+    if (min>0)
+      sprintf(bStr, "%8.3f MB ..",
+	      (double)(min * blockSize) / 1024.0 / 1024.0);
+    else
+      sprintf(bStr, "   inf/cold   ");
+
+    fprintf(out, "%s[%s] %s %s\n", pStr, bStr,
+	    formatLong(aCount, maxCount),
+	    formatBar(aCount, maxCount, 60));
+    b = bNext;
+  } while(b!=0);
+
+  ds_num++;
+}
 
   RD_stat(stack_size, aCount);
 

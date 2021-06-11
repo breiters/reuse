@@ -1,4 +1,4 @@
-CXX=g++-4.9
+CXX=g++#-4.9
 
 ifdef PIN_ROOT
 CONFIG_ROOT := $(PIN_ROOT)/source/tools/Config

@@ -5,15 +5,17 @@
  * GPLv2+ (see COPYING)
  */
 
+
 #include "pin.H"
 
-#include <stdio.h>
 #include <cassert>
-#include <cstring>
 #include <cmath>
+#include <cstring>
+#include <stdio.h>
 #include <unistd.h>
 
 #include "dist.cpp"
+// #include "ds.cpp"
 
 // Consistency checks?
 #define DEBUG 0
@@ -30,6 +32,7 @@
 
 // must be a power-of-two
 #define MEMBLOCKLEN 64
+#define MEMBLOCK_MASK ~(MEMBLOCKLEN - 1)
 
 unsigned long stackAccesses;
 unsigned long ignoredReads, ignoredWrites;
@@ -73,21 +76,46 @@ void accessMerging(Addr a)
 /* Direct Callbacks                                                      */
 /* ===================================================================== */
 
+// size: #bytes accessed
 void memAccess(ADDRINT addr, UINT32 size)
 {
-  Addr a1 = (void*) (addr & ~(MEMBLOCKLEN-1));
-  Addr a2 = (void*) ((addr+size-1) & ~(MEMBLOCKLEN-1));
+  static Addr a1_last;
+  static Addr a2_last;
+
+  // bytes accessed: [addr, ... , addr+size-1]
+
+  // calculate memory block (cacheline) of low address
+  Addr a1 = (void*) (addr & MEMBLOCK_MASK);
+  // calculate memory block (cacheline) of high address
+  Addr a2 = (void*) ((addr+size-1) & MEMBLOCK_MASK);
+
+  bool accessed_before = false;
+
+  // skip counting if repeated access ?
+  if(a1 == a1_last || a1 == a2_last) {
+    accessed_before = true;
+  }
+
+  a1_last = a1;
+  a2_last = a2;
+
+  if(accessed_before) return; // TODO: account in bucket 0
+
+  // single memory block accessed
   if (a1 == a2) {
     if (VERBOSE >1)
       fprintf(stderr," => %p\n", a1);
     RD_accessBlock(a1);
   }
+  // memory access spans across two memory blocks
+  // => two memory blocks accessed
   else {
     if (VERBOSE >1)
       fprintf(stderr," => CROSS %p/%p\n", a1, a2);
     RD_accessBlock(a1);
     RD_accessBlock(a2);
   }
+  
 }
 
 VOID memRead(THREADID t, ADDRINT addr, UINT32 size)
@@ -200,6 +228,10 @@ INT32 Usage()
   return -1;
 }
 
+/* ===================================================================== */
+/* Datastructures                                                        */
+/* ===================================================================== */
+
 
 int main (int argc, char *argv[])
 {
@@ -216,10 +248,13 @@ int main (int argc, char *argv[])
   stackAccesses = 0;
 
   PIN_InitSymbols();
+
   INS_AddInstrumentFunction(Instruction, 0);
   PIN_AddFiniFunction(Exit, 0);
   PIN_AddThreadStartFunction(ThreadStart, 0);
-  
+
+  IMG_AddInstrumentFunction(ImageLoad, 0);
+
   PIN_StartProgram();
   return 0;	
 }

@@ -9,6 +9,7 @@
 
 using namespace std;
 #include "dist.cpp"
+#include <math.h>
 
 // must be a power-of-two
 #define MEMBLOCKLEN 64

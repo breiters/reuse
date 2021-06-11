@@ -1,10 +1,11 @@
-CXX           := g++-4.9
+CXX           := g++#-4.8#9
 TOOL_ROOTS    := pindist pintrace
 TOOL_CXXFLAGS += -std=c++11
 
 #CXXFLAGS=-O3 -fomit-frame-pointer -fno-strict-aliasing -std=c++11
 CXXFLAGS=-g -O2 -std=c++11
-distcalc: distcalc.cpp
+#CXXFLAGS=-g -O2 -std=c++11 -fno-inline -pg
+distcalc: distcalc.cpp ds.cpp dist.cpp
 	$(CXX) $(CXXFLAGS) distcalc.cpp -o distcalc
 
 cleandir:

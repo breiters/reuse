@@ -47,6 +47,8 @@ public:
   int ds_bucket; // current bucket if datastructure had exclusive cache
   int ds_num; // datastructure it belongs to
 
+  Addr a;
+
 };
 #else
 class MemoryBlock {
@@ -79,10 +81,10 @@ public:
 
   std::vector<unsigned long> ds_aCount;
   std::vector<unsigned long> ds_aCount_excl;
-  std::vector<Marker> ds_markers_excl;
+  std::vector<Marker> ds_markers;
 
   void register_datastruct();
-  void on_datastruct_get_active(int ds_num, Marker stack_pos);
+  // void on_datastruct_get_active(int ds_num, Marker stack_pos);
 };
 
 // initialize / clear used structs

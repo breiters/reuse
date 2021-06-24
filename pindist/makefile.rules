@@ -1,11 +1,34 @@
-CXX           := g++#-4.8#9
+CXX           := g++
 TOOL_ROOTS    := pindist pintrace
 TOOL_CXXFLAGS += -std=c++11
 
-#CXXFLAGS=-O3 -fomit-frame-pointer -fno-strict-aliasing -std=c++11
-CXXFLAGS=-g -O2 -std=c++11
+CXXFLAGS=-O3 -fomit-frame-pointer -fno-strict-aliasing -std=c++11
+#CXXFLAGS=-g -O2 -std=c++11
 #CXXFLAGS=-g -O2 -std=c++11 -fno-inline -pg
-distcalc: distcalc.cpp ds.cpp dist.cpp
+
+# ================================================================
+# Build the intermediate object files for pindist.
+# ================================================================
+$(OBJDIR)pindist$(OBJ_SUFFIX): pindist.cpp
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+$(OBJDIR)dist$(OBJ_SUFFIX): dist.cpp dist.h
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+$(OBJDIR)ds$(OBJ_SUFFIX): ds.cpp ds.h
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+$(OBJDIR)cachesim$(OBJ_SUFFIX): cachesim.cpp cachesim.h
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+# ================================================================
+# Build the pindist tool as a dll (shared object).
+# ================================================================
+$(OBJDIR)pindist$(PINTOOL_SUFFIX): $(OBJDIR)ds$(OBJ_SUFFIX) $(OBJDIR)cachesim$(OBJ_SUFFIX) $(OBJDIR)dist$(OBJ_SUFFIX) $(OBJDIR)pindist$(OBJ_SUFFIX)
+	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
+
+
+distcalc: distcalc.cpp dist.cpp
 	$(CXX) $(CXXFLAGS) distcalc.cpp -o distcalc
 
 cleandir:
@@ -20,3 +43,4 @@ install_pindist_wrapper:
 install_pintrace_wrapper:
 	echo "time \$$PIN_ROOT/pin -xyzzy -ifeellucky -t $$PWD/obj-intel64/pintrace.so \$$*" > pintrace
 	cp pintrace ~/bin/ && chmod 755 ~/bin/pintrace
+

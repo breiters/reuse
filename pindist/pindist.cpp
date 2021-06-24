@@ -14,8 +14,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "dist.cpp"
-// #include "ds.cpp"
+#include "dist.h"
+#include "ds.h"
+// #include "dist.cpp"
 
 // Consistency checks?
 #define DEBUG 0
@@ -89,7 +90,7 @@ void memAccess(ADDRINT addr, UINT32 size)
   // calculate memory block (cacheline) of high address
   Addr a2 = (void*) ((addr+size-1) & MEMBLOCK_MASK);
 
-  bool accessed_before = false;
+  [[maybe_unused]] bool accessed_before = false;
 
   // skip counting if repeated access ?
   if(a1 == a1_last || a1 == a2_last) {
@@ -99,7 +100,8 @@ void memAccess(ADDRINT addr, UINT32 size)
   a1_last = a1;
   a2_last = a2;
 
-  if(accessed_before) return; // TODO: account in bucket 0
+  if(accessed_before) 
+    return; // TODO: account in bucket 0
 
   // single memory block accessed
   if (a1 == a2) {
@@ -242,8 +244,12 @@ int main (int argc, char *argv[])
   int s = KnobDoubleSteps.Value();
   double f = pow(2, 1.0/s);
   RD_init((int)(d / MEMBLOCKLEN));
-  for(d*=f; d< 1024*1024*1024; d*=f)
+  for(d*=f; d< 1024*1024*1024; d*=f) {
+    // printf("add bucket: %d\n", (int)(d / MEMBLOCKLEN));
     RD_addBucket((int)(d / MEMBLOCKLEN));
+  }
+
+  // return 0;
 
   stackAccesses = 0;
 

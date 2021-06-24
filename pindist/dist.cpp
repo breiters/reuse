@@ -7,7 +7,8 @@
 
 
 #include "dist.h"
-#include "ds.hpp"
+#include "cachesim.h"
+#include "ds.h"
 
 #include <algorithm>
 // #include <bits/charconv.h>
@@ -18,111 +19,84 @@
 #include <unordered_map>
 #include <vector>
 
+#define DATASTRUCT_UNKNOWN -1
+
 using namespace std;
 
 //-------------------------------------------------------------------------
 // Stack structure with MemoryBlock as element
 
+// TODO:
+// list<reference_wrapper<MemoryBlock>> stack;
 list<MemoryBlock> stack;
 
 typedef list<MemoryBlock>::iterator Marker;
 
 vector<datastruct_info> datastructs;
+vector<CacheSim> cachesims;
 
 vector<Bucket> buckets;
 int nextBucket; // when stack is growing, we may enter this bucket
 
-unordered_map<Addr,list<MemoryBlock>::iterator> addrMap;
+// unordered_map<Addr,list<MemoryBlock>::iterator> addrMap;
+unordered_map<Addr, std::pair<Marker, Marker>> addrMap;
 
 #if MIN_BLOCKSTRUCT
-MemoryBlock::MemoryBlock(Addr a) : bucket{0}, ds_num{0} {}// generated on first access
-MemoryBlock::MemoryBlock(Addr a, int num) : bucket{0}, ds_num{num} {}
+MemoryBlock::MemoryBlock(Addr a) : bucket{0}, ds_bucket{0}, ds_num{DATASTRUCT_UNKNOWN} {}// generated on first access
+MemoryBlock::MemoryBlock(Addr a, int num) : bucket{0}, ds_bucket{0}, ds_num{num}, a{a} {}
 #else
-
+// TODO
 #endif
 
-Bucket::Bucket(int m)  {
+Bucket::Bucket(int m)  
+{
     aCount = 0;
     min = m;
     marker = stack.end();
 }
 
-void Bucket::register_datastruct() {
+void Bucket::register_datastruct() 
+{
     ds_aCount.push_back(0);
     ds_aCount_excl.push_back(0);
-    ds_markers_excl.push_back(marker); // TODO
+
+    assert(datastructs.size() > 0);
+    // TODO !?DOES NOT WORK HERE?!: (is done in CacheSim::move_markers instead)
+    ds_markers.push_back(cachesims[datastructs.size() - 1].stack().end());
 }
 
-void Bucket::on_datastruct_get_active(int ds_num, list<MemoryBlock>::iterator stack_pos) { }
-
-void register_datastruct(datastruct_info &info) {
+void register_datastruct(datastruct_info &info) 
+{
   datastructs.push_back(info);
+  cachesims.push_back(CacheSim{static_cast<int>(datastructs.size()) - 1});
+  // ds_stack_size.push_back(0);
+  // ds_nextBucket.push_back(1);
+
   for(auto &bucket : buckets) {
     bucket.register_datastruct();
-    // assert(bucket.ds_aCount.size() == datastructs.size());
-    // assert(bucket.ds_markers_excl.size() == datastructs.size());
+    assert(bucket.ds_aCount.size() == datastructs.size());
+    assert(bucket.ds_markers.size() == datastructs.size());
   }
 }
 
+// TODO: use better algorithm to get datastruct
 int get_ds_num(Addr addr)
-   {
-     int i = 0;
-     for(auto &ds : datastructs) {
-       if((ADDRINT)addr >= (ADDRINT)ds.address && (ADDRINT)addr < (ADDRINT)ds.address + (ADDRINT)ds.nbytes - 1) {
-        //  printf("datastructure accessed:\n");
-        //  ds.print();
-         return i;
-       }
-       i++;
-     }
-     return -1;
-   }
-
-/*
-   void add_bucket(uint min) {
-     assert(buckets.size() > 2);
-     assert(buckets[buckets.size()-2].min < min);
-     buckets.insert( buckets.end()-1, Bucket(min) );
-   }
-
-   void move_markers(int topBucket) {
-    //  for(auto bucket : buckets.)
-    for(int b=1; b<topBucket; b++) {
-      --buckets.at(b).marker;
-      (buckets.at(b).marker)->bucket++;
-      if (RD_DEBUG)
-        assert( (buckets[b].marker)->bucket == b );
+{
+  int i = 0;
+  for(auto &ds : datastructs) {
+    if((ADDRINT)addr >= (ADDRINT)ds.address && (ADDRINT)addr < (ADDRINT)ds.address + (ADDRINT)ds.nbytes - 1) {
+     //  printf("datastructure accessed:\n");
+     //  ds.print();
+      return i;
     }
-   }
-
-   bool last_bucket_reached() {
-     return buckets[nextBucket].min == 0;
-   }
-
-   uint next_bucket_capacity() {
-     return buckets[nextBucket].min;
-   }
-
-   void activate_next_bucket() {
-
-   if (RD_VERBOSE >0)
-    fprintf(stderr," ACTIVATE bucket %d (next bucket minimum depth %d)\n",
-	    nextBucket, buckets[nextBucket+1].min);
-
-  --buckets[nextBucket].marker; // set marker to last entry
-  (buckets[nextBucket].marker)->bucket++; 
-  if (RD_DEBUG)
-    assert( (buckets[nextBucket].marker)->bucket == nextBucket );
-
-  nextBucket++;
-
-   }
-   */
-
-  //  int nextBucket() { return nextBucket; }
+    i++;
+  }
+  return DATASTRUCT_UNKNOWN;
+}
 
 // TODO: refactor ...
-#include "ds.cpp"
+// #include "ds.cpp"
+// #include "cachesim.cpp"
 
 #if FUTURE_IMPROVED_HASH
 //-------------------------------------------------------------------------
@@ -200,6 +174,9 @@ void RD_init(int min1)
   addrMap.clear();
   datastructs.clear();
   //addrMap.rehash(4000000);
+  // printf("min1: %d\n", min1);
+  // exit(1);
+  min1 = 10;
 
   buckets.clear();
   buckets.push_back( Bucket(0) );    // bucket starting with distance 0
@@ -282,19 +259,34 @@ void moveMarkers(int topBucket)
   }
 }
 
+
 void handleNewBlock(Addr a)
 {
   int ds_num = get_ds_num(a);
+  MemoryBlock mb = MemoryBlock{a, ds_num};
+
+  //list<MemoryBlock>::iterator
+  Marker it;
+  
   // new memory block
-  stack.push_front( MemoryBlock(a, ds_num) );
-  addrMap[a] = stack.begin();
+  stack.push_front( mb );
+  if(ds_num > DATASTRUCT_UNKNOWN) {
+    it = cachesims[ds_num].on_new_block( mb );
+    // it = cachesims[ds_num].stack().begin();
+  }
+
+  addrMap[a] = std::make_pair(stack.begin(), it);
 
   if (RD_VERBOSE >1)
     fprintf(stderr," NEW block %p, now %lu blocks seen\n", a, stack.size());
 
   // move all markers of active buckets
   moveMarkers(nextBucket-1);
+  
+  bool next_bucket_active = addrMap.size() > buckets[nextBucket].min;
+  bool last_bucket_reached = buckets[nextBucket].min == 0;
 
+#if USE_OLD_CODE
   // does another bucket get active?
   if (addrMap.size() <= buckets[nextBucket].min) return;
   if (buckets[nextBucket].min == 0) return; // last bucket reached
@@ -302,13 +294,15 @@ void handleNewBlock(Addr a)
   if (RD_VERBOSE >0)
     fprintf(stderr," ACTIVATE bucket %d (next bucket minimum depth %d)\n",
 	    nextBucket, buckets[nextBucket+1].min);
+#endif
 
-  --buckets[nextBucket].marker; // set marker to last entry
-  (buckets[nextBucket].marker)->bucket++;
-  if (RD_DEBUG)
-    assert( (buckets[nextBucket].marker)->bucket == nextBucket );
-
-  nextBucket++;
+  if(!last_bucket_reached && next_bucket_active) {
+    --buckets[nextBucket].marker; // set marker to last entry
+    (buckets[nextBucket].marker)->bucket++;
+    // if (RD_DEBUG)
+      assert( (buckets[nextBucket].marker)->bucket == nextBucket );
+    nextBucket++;
+  }
 }
 
 void moveBlockToTop(Addr a, list<MemoryBlock>::iterator blockIt, int bucket)
@@ -319,12 +313,11 @@ void moveBlockToTop(Addr a, list<MemoryBlock>::iterator blockIt, int bucket)
   moveMarkers(bucket);
 
   // move element pointed to by blockIt to beginning of list
-  stack.splice(stack.begin(), stack, blockIt); // TODO
-  // stack.remove(blockIt);
-  // stack.insert(blockIt);
+  stack.splice(stack.begin(), stack, blockIt);
 
   blockIt->incACount();
   blockIt->bucket = 0;
+  // blockIt->ds_bucket = 0;
 
   if (RD_VERBOSE >1)
     fprintf(stderr," MOVED %p from bucket %d to top (aCount %lu)\n",
@@ -336,38 +329,60 @@ void moveBlockToTop(Addr a, list<MemoryBlock>::iterator blockIt, int bucket)
 // To use a specific block size, ensure that <a> is aligned
 void RD_accessBlock(Addr a)
 {
-  int bucket;
+  int bucket; // bucket of current access
+  int ds_bucket = 0;
+  int ds_num;
   auto it = addrMap.find(a);
+
   if (it == addrMap.end()) {
     handleNewBlock(a);
     bucket = buckets.size()-1; // "infinite" distance, put in last bucket
+    ds_bucket = buckets.size()-1;
+    ds_num = get_ds_num(a); // TODO double work!
   }
   else {
     // memory block already seen
-    auto blockIt = it->second;
-    bucket = blockIt->bucket;
+    auto pair = it->second;
+    auto blockIt = pair.first;
 
+    bucket = blockIt->bucket;
+    ds_num = blockIt->ds_num;
+
+    // if not already on top of stack, move to top
     if (blockIt != stack.begin()) {
       moveBlockToTop(a, blockIt, bucket);
     }
     else {
       blockIt->incACount();
       if (RD_VERBOSE >1)
-	fprintf(stderr," TOP %p accessed, bucket %d, aCount %lu\n",
-		a, bucket, blockIt->getACount());
+	      fprintf(stderr," TOP %p accessed, bucket %d, aCount %lu\n",
+		            a, bucket, blockIt->getACount());
+    }
+
+    if(ds_num > DATASTRUCT_UNKNOWN) {
+      ds_bucket = pair.second->ds_bucket;
+
+      // TODO:
+      // need list<reference_wrapper> for those asserts:
+      // list contains objects not references
+      // assert(pair.second->ds_bucket == ds_bucket);
+      // assert(pair.second->ds_num == ds_num);
+      assert(ds_bucket < (int)buckets.size());
+
+      cachesims[ds_num].on_block_seen(pair.second);
     }
   }
-
   // global access count
   buckets[bucket].aCount++;
 
   // access count to datastructure
-  int ds_num = get_ds_num(a);
-  if(ds_num > -1) {
-    // printf("ds_num: %d %d %d %d\n", ds_num, (int)datastructs.size(), (int)buckets[bucket].ds_aCount.size(), bucket);
-    assert((int) datastructs.size() >= ds_num - 1);
-    assert(buckets[bucket].ds_aCount.size() == datastructs.size());
+  if(ds_num > DATASTRUCT_UNKNOWN) {
+    assert(ds_bucket > -1);
+    assert(ds_bucket <= (int) buckets.size() - 1);
+    // assert(buckets[bucket].ds_markers_excl[ds_num]->ds_num == ds_num);
+    
     buckets[bucket].ds_aCount[ds_num]++;
+    buckets[ds_bucket].ds_aCount_excl[ds_num]++;
   }
 
   if (RD_DEBUG) {
@@ -383,7 +398,7 @@ void RD_accessBlock(Addr a)
 
 
 // get statistics
-void RD_stat(unsigned long & stack_size, unsigned long & accessCount) //, vector<unsigned long> )
+void RD_stat(unsigned long & stack_size, unsigned long & accessCount)
 {
   if (RD_DEBUG)
     RD_checkConsistency();
@@ -420,6 +435,19 @@ int RD_get_hist_ds(int ds_num, unsigned int b,
   assert((b>=0) && (b < buckets.size()));
   min = buckets[b].min;
   accessCount = buckets[b].ds_aCount[ds_num];
+  if (b == buckets.size()-1) return 0;
+  return b+1;
+}
+
+
+int RD_get_hist_ds_excl(int ds_num, unsigned int b,
+		unsigned int & min, unsigned long & accessCount)
+{
+  //if (RD_DEBUG) RD_checkConsistency();
+
+  assert((b>=0) && (b < buckets.size()));
+  min = buckets[b].min;
+  accessCount = buckets[b].ds_aCount_excl[ds_num];
   if (b == buckets.size()-1) return 0;
   return b+1;
 }
@@ -487,6 +515,8 @@ void RD_printHistogram(FILE* out, const char* pStr, int blockSize)
   if (maxNonEmptyBucket < maxBucket)
     maxNonEmptyBucket++;
 
+  // TODO: duplicated code !
+
   //  fprintf(out, "%sMaxBucket %d NonEmpty %d\n",
   //          pStr, maxBucket, maxNonEmptyBucket);
 
@@ -514,9 +544,12 @@ void RD_printHistogram(FILE* out, const char* pStr, int blockSize)
     b = bNext;
   } while(b!=0);
 
+  // Datastructure prints
+
 int ds_num = 0;
   for (auto ds : datastructs)
 {
+  putchar('\n');
   ds.print();
 
   bNext = RD_get_hist_ds(ds_num, 0, min, aCount);
@@ -526,6 +559,32 @@ int ds_num = 0;
   b = bNext;
   do {
     bNext = RD_get_hist_ds(ds_num, b, min, aCount);
+    if ((b>maxNonEmptyBucket) && (aCount == 0)) {
+      b = bNext;
+      continue;
+    }
+
+    if (min>0)
+      sprintf(bStr, "%8.3f MB ..",
+	      (double)(min * blockSize) / 1024.0 / 1024.0);
+    else
+      sprintf(bStr, "   inf/cold   ");
+
+    fprintf(out, "%s[%s] %s %s\n", pStr, bStr,
+	    formatLong(aCount, maxCount),
+	    formatBar(aCount, maxCount, 60));
+    b = bNext;
+  } while(b!=0);
+
+  puts("exclusive:");
+
+  bNext = RD_get_hist_ds_excl(ds_num, 0, min, aCount);
+  fprintf(out, "%s[%8.3f MB ..] %s ==>\n",
+	  pStr, (double)(min * blockSize)/1000000.0,
+	  formatLong(aCount,aCount));
+  b = bNext;
+  do {
+    bNext = RD_get_hist_ds_excl(ds_num, b, min, aCount);
     if ((b>maxNonEmptyBucket) && (aCount == 0)) {
       b = bNext;
       continue;

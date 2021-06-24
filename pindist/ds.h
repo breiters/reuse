@@ -23,8 +23,10 @@ struct datastruct_info {
     {
         cout << "============================\n";
         cout << "bytes allocated by " << allocator << "(): " << nbytes << '\n';
-        cout << "in: " << file_name << " line: " << line << " col: " << col << '\n';
+        cout << "in: " << file_name << " line: ?" << line << "? col: " << col << '\n';
         cout << "located at address: " << hex << address << dec << '\n';
         cout << "============================\n";
     }
 };
+
+extern VOID ImageLoad(IMG img, VOID *v);

@@ -6,7 +6,6 @@
 
 #pragma once
 
-
 #include <algorithm>
 // #include <bits/charconv.h>
 #include <cassert>
@@ -16,8 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
-typedef void* Addr;
-
+typedef void *Addr;
 
 // Assertions and consistency check?
 #define RD_DEBUG 0
@@ -28,7 +26,6 @@ typedef void* Addr;
 // use minimal memory block element? Prohibits consistency checks
 #define MIN_BLOCKSTRUCT 1
 
-
 //-------------------------------------------------------------------------
 // Stack structure with MemoryBlock as element
 
@@ -38,25 +35,27 @@ public:
   MemoryBlock(Addr a); // generated on first access
   MemoryBlock(Addr a, int num);
 
-  inline void print(char* b)
-    { sprintf(b, "block at bucket %d", bucket); }
+  inline void print(char *b) { sprintf(b, "block at bucket %d", bucket); }
   inline void incACount() {}
   inline unsigned long getACount() { return 1; }
 
-  int bucket; // current bucket
+  int bucket;    // current bucket
   int ds_bucket; // current bucket if datastructure had exclusive cache
-  int ds_num; // datastructure it belongs to
+  int ds_num;    // datastructure it belongs to
 
   Addr a;
-
 };
 #else
 class MemoryBlock {
 public:
-  MemoryBlock(Addr a)
-    { addr = a; bucket = 0; aCount = 1; } // generated on first access
-  void print(char* b)
-    { sprintf(b, "block %p, bucket %d, aCount %lu", addr, bucket, aCount); }
+  MemoryBlock(Addr a) {
+    addr = a;
+    bucket = 0;
+    aCount = 1;
+  } // generated on first access
+  void print(char *b) {
+    sprintf(b, "block %p, bucket %d, aCount %lu", addr, bucket, aCount);
+  }
   void incACount() { aCount++; }
   unsigned long getACount() { return aCount; }
 
@@ -67,7 +66,6 @@ private:
   unsigned long aCount;
 };
 #endif
-
 
 class Bucket {
 public:
@@ -84,7 +82,6 @@ public:
   std::vector<Marker> ds_markers;
 
   void register_datastruct();
-  // void on_datastruct_get_active(int ds_num, Marker stack_pos);
 };
 
 // initialize / clear used structs
@@ -103,14 +100,14 @@ void RD_accessBlock(Addr a);
 void RD_checkConsistency();
 
 // get statistics
-void RD_stat(unsigned long & stack_size, unsigned long & accessCount);
+void RD_stat(unsigned long &stack_size, unsigned long &accessCount);
 
 // get resulting histogram
 // Repeatly call RD_get_hist, start with bucket 0.
 // Returns next bucket or 0 if this was last
-int RD_get_hist(unsigned int bucket,
-		unsigned int & min, unsigned long & accessCount);
+int RD_get_hist(unsigned int bucket, unsigned int &min,
+                unsigned long &accessCount);
 
 // print nice ASCII histogram to <out>
 //  <pStr> is prefix for every line, distances scaled by <blockSize>
-void RD_printHistogram(FILE* out, const char* pStr, int blockSize);
+void RD_printHistogram(FILE *out, const char *pStr, int blockSize);

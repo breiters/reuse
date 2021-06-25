@@ -6,6 +6,7 @@
 
 extern void register_datastruct(datastruct_info &info);
 
+typedef VOID *(*FP_MALLOC)(size_t);
 // This is the replacement routine.
 VOID *NewMalloc(FP_MALLOC orgFuncptr, UINT32 arg0, ADDRINT returnIp)
 {
@@ -17,6 +18,31 @@ VOID *NewMalloc(FP_MALLOC orgFuncptr, UINT32 arg0, ADDRINT returnIp)
     info.nbytes = arg0;
     info.is_active = true;
     info.allocator = "malloc";
+
+    PIN_LockClient();
+    LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col, &info.line, &info.file_name);
+    PIN_UnlockClient();
+
+    // TODO: case file_name length == 0
+    if (info.file_name.length() > 0) {
+        register_datastruct(info);
+        // info.print();
+    }
+
+    return info.address;
+}
+
+typedef void *(*fp_calloc)(size_t, size_t);
+VOID *NewCalloc(fp_calloc orgFuncptr, UINT64 arg0, UINT64 arg1, ADDRINT returnIp)
+{
+    datastruct_info info;
+
+    // Call the relocated entry point of the original (replaced) routine.
+    info.address = orgFuncptr(arg0, arg1);
+
+    info.nbytes = arg0 * arg1;
+    info.is_active = true;
+    info.allocator = "calloc";
 
     PIN_LockClient();
     LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col, &info.line, &info.file_name);
@@ -59,10 +85,7 @@ VOID *NewAlignedAlloc(fp_aligned_alloc orgFuncptr, UINT64 arg0, UINT64 arg1, ADD
 }
 
 typedef int(*fp_posix_memalign)(void **, size_t, size_t);
-// typedef int(*fp_posixmemalign)(void **, int, int);
 
-// int NewPosixMemalign(fp_posixmemalign orgFuncptr, void **memptr, size_t arg0, size_t arg1, ADDRINT returnIp)
-// INT32 NewPosixMemalign(fp_posixmemalign orgFuncptr, VOID **memptr, UINT32 arg0, UINT32 arg1, ADDRINT returnIp)
 INT32 NewPosixMemalign(fp_posix_memalign orgFuncptr, VOID **memptr, UINT64 arg0, UINT64 arg1, ADDRINT returnIp)
 {
     datastruct_info info;
@@ -123,6 +146,38 @@ VOID ImageLoad(IMG img, VOID *v)
                              IARG_ORIG_FUNCPTR,
                              IARG_FUNCARG_ENTRYPOINT_VALUE,
                              0,
+                             IARG_RETURN_IP,
+                             IARG_END);
+        // Free the function prototype.
+        //
+        PROTO_Free(proto_malloc);
+    }
+
+    rtn = RTN_FindByName(img, "calloc");
+
+    if (RTN_Valid(rtn)) {
+        cout << "Replacing calloc in " << IMG_Name(img) << endl;
+        // Define a function prototype that describes the application routine
+        // that will be replaced.
+        //
+        PROTO proto_malloc = PROTO_Allocate(PIN_PARG(void *),
+                                            CALLINGSTD_DEFAULT,
+                                            "calloc",
+                                            PIN_PARG(size_t),
+                                            PIN_PARG(size_t),
+                                            PIN_PARG_END());
+        // Replace the application routine with the replacement function.
+        // Additional arguments have been added to the replacement routine.
+        //
+        RTN_ReplaceSignature(rtn,
+                             AFUNPTR(NewCalloc),
+                             IARG_PROTOTYPE,
+                             proto_malloc,
+                             IARG_ORIG_FUNCPTR,
+                             IARG_FUNCARG_ENTRYPOINT_VALUE,
+                             0,
+                             IARG_FUNCARG_ENTRYPOINT_VALUE,
+                             1,
                              IARG_RETURN_IP,
                              IARG_END);
         // Free the function prototype.

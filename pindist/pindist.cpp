@@ -197,23 +197,23 @@ VOID ThreadStart(THREADID t, CONTEXT *ctxt, INT32 flags, VOID *v)
 /* ===================================================================== */
 
 
-
 VOID Exit(INT32 code, VOID *v)
 {
   char pStr[20];
+  FILE *out = stdout;
 
   if (KnobPIDPrefix.Value())
     sprintf(pStr, "--%5d-- ", getpid());
   else
     pStr[0] = 0;
 
-  RD_printHistogram(stderr, pStr, MEMBLOCKLEN);
+  RD_printHistogram(out, pStr, MEMBLOCKLEN);
 
-  fprintf(stderr,
+  fprintf(out,
 	  "%s  ignored stack accesses: %lu\n",
 	  pStr, stackAccesses);
 
-  fprintf(stderr,
+  fprintf(out,
 	  "%s  ignored accesses by thread != 0: %lu reads, %lu writes\n",
 	  pStr, ignoredReads, ignoredWrites);
 }
@@ -248,8 +248,6 @@ int main (int argc, char *argv[])
     // printf("add bucket: %d\n", (int)(d / MEMBLOCKLEN));
     RD_addBucket((int)(d / MEMBLOCKLEN));
   }
-
-  // return 0;
 
   stackAccesses = 0;
 

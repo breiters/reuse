@@ -1,6 +1,6 @@
 CXX           := g++
 TOOL_ROOTS    := pindist pintrace
-TOOL_CXXFLAGS += -std=c++11 -DNDEBUG
+TOOL_CXXFLAGS += -std=c++11 #-DNDEBUG
 
 CXXFLAGS=-O3 -fomit-frame-pointer -fno-strict-aliasing -std=c++11
 #CXXFLAGS=-g -O2 -std=c++11

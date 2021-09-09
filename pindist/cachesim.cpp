@@ -1,7 +1,7 @@
 #include <cassert>
 
-#include "cachesim.h"
 #include "bucket.h"
+#include "cachesim.h"
 
 extern std::vector<Bucket> buckets;
 
@@ -19,9 +19,9 @@ void CacheSim::on_next_bucket_gets_active() {
   assert(buckets[next_bucket_].ds_markers[datastruct_num_] != stack_.end());
 
   // last stack element is now in the next higher bucket
-  buckets[next_bucket_].ds_markers[datastruct_num_]->ds_bucket++;
+  (*(buckets[next_bucket_].ds_markers[datastruct_num_]))->ds_bucket++;
 
-  assert(buckets[next_bucket_].ds_markers[datastruct_num_]->ds_bucket ==
+  assert((*(buckets[next_bucket_].ds_markers[datastruct_num_]))->ds_bucket ==
          next_bucket_);
 
   next_bucket_++;
@@ -34,8 +34,7 @@ void CacheSim::on_next_bucket_gets_active() {
  * @param mb The memory block.
  * @return list<MemoryBlock>::iterator The stack begin iterator.
  */
-const list<MemoryBlock>::iterator
-CacheSim::on_new_block(const MemoryBlock &mb) {
+const Marker CacheSim::on_new_block(MemoryBlock *mb) {
   stack_.push_front(mb);
 
   move_markers(next_bucket_ - 1);
@@ -56,21 +55,21 @@ CacheSim::on_new_block(const MemoryBlock &mb) {
  *
  * @param blockIt
  */
-void CacheSim::on_block_seen(const list<MemoryBlock>::iterator &blockIt) {
+void CacheSim::on_block_seen(const Marker &blockIt) {
   // if already on top do nothing
   if (blockIt == stack_.begin()) {
     return;
   }
 
   // move all markers below current memory blocks bucket
-  int bucket = blockIt->ds_bucket;
+  int bucket = (*blockIt)->ds_bucket;
   move_markers(bucket);
 
   // put current memory block on top and set its buckets to zero
   stack_.splice(stack_.begin(), stack_, blockIt);
 
-  assert(blockIt->bucket == 0);
-  blockIt->ds_bucket = 0;
+  assert((*blockIt)->bucket == 0);
+  (*blockIt)->ds_bucket = 0;
 }
 
 void CacheSim::move_markers(int topBucket) {
@@ -85,7 +84,7 @@ void CacheSim::move_markers(int topBucket) {
     assert(buckets[b].ds_markers[datastruct_num_] != stack_.begin());
     assert(buckets[b].ds_markers[datastruct_num_] != stack_.end());
 
-    buckets[b].ds_markers[datastruct_num_]->ds_bucket++;
+    (*(buckets[b].ds_markers[datastruct_num_]))->ds_bucket++;
 
     // assert((buckets[b].marker)->ds_bucket == b); // TODO ??
   }

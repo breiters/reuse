@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <list>
 
 // use minimal memory block element? Prohibits consistency checks
 #define MIN_BLOCKSTRUCT 1
@@ -46,3 +47,5 @@ private:
   unsigned long aCount;
 };
 #endif
+
+using Marker = std::list<MemoryBlock *>::iterator;

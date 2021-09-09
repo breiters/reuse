@@ -1,16 +1,14 @@
 #pragma once
 
+#include "memoryblock.h"
 #include <list>
 #include <string>
 #include <vector>
-#include "memoryblock.h"
 
 class Bucket {
 public:
   Bucket();
   Bucket(int m);
-
-  using Marker = std::list<MemoryBlock>::iterator;
 
   unsigned long aCount;
   unsigned int min;

@@ -25,16 +25,11 @@
 
 using namespace std;
 
-// typedef list<std::shared_ptr<MemoryBlock>>::iterator Marker;
-typedef list<MemoryBlock>::iterator Marker;
-
 //-------------------------------------------------------------------------
 // Stack structure with MemoryBlock as element
-
-// TODO:
-// list<reference_wrapper<MemoryBlock>> stack;
+typedef list<MemoryBlock *>::iterator Marker;
 // list<MemoryBlock *> stack;
-list<MemoryBlock> stack;
+list<MemoryBlock *> stack;
 
 vector<datastruct_info> datastructs;
 vector<CacheSim> cachesims;
@@ -192,7 +187,7 @@ void RD_checkConsistency() {
             buckets[b].min, buckets[b].aCount);
   }
 
-  list<MemoryBlock>::iterator stackIt;
+  Marker stackIt;
   for (stackIt = stack.begin(); stackIt != stack.end(); ++stackIt, ++d) {
     if (d == buckets[b + 1].min) {
       b++;
@@ -205,11 +200,11 @@ void RD_checkConsistency() {
 
     if (RD_VERBOSE > 1) {
       static char b[100];
-      stackIt->print(b);
+      (*stackIt)->print(b);
       fprintf(stderr, "   %5d: %s\n", d, b);
     }
-    aCount1 += stackIt->getACount();
-    assert(stackIt->bucket == b);
+    aCount1 += (*stackIt)->getACount();
+    assert((*stackIt)->bucket == b);
   }
   assert(nextBucket = b + 1);
   b = buckets.size() - 1;
@@ -229,15 +224,15 @@ void RD_checkConsistency() {
 void moveMarkers(int topBucket) {
   for (int b = 1; b <= topBucket; b++) {
     --buckets.at(b).marker;
-    (buckets.at(b).marker)->bucket++;
+    (*(buckets.at(b).marker))->bucket++;
     if (RD_DEBUG)
-      assert((buckets[b].marker)->bucket == b);
+      assert((*(buckets[b].marker))->bucket == b);
   }
 }
 
 int handleNewBlock(Addr a) {
   int ds_num = get_ds_num(a);
-  MemoryBlock mb = MemoryBlock{a, ds_num};
+  MemoryBlock *mb = new MemoryBlock{a, ds_num};
   Marker it;
 
   // new memory block
@@ -272,16 +267,16 @@ int handleNewBlock(Addr a) {
 
   if (!last_bucket_reached && next_bucket_active) {
     --buckets[nextBucket].marker; // set marker to last entry
-    (buckets[nextBucket].marker)->bucket++;
+    (*(buckets[nextBucket].marker))->bucket++;
     // if (RD_DEBUG)
-    assert((buckets[nextBucket].marker)->bucket == nextBucket);
+    assert((*(buckets[nextBucket].marker))->bucket == nextBucket);
     nextBucket++;
   }
 
   return ds_num;
 }
 
-void moveBlockToTop(Addr a, list<MemoryBlock>::iterator blockIt, int bucket) {
+void moveBlockToTop(Addr a, Marker blockIt, int bucket) {
   // move markers of active buckets within range 1 to <bucket>.
   // we need to do this before moving blockIt to top, as
   // there could be a marker on blockIt, which would go wrong
@@ -290,13 +285,13 @@ void moveBlockToTop(Addr a, list<MemoryBlock>::iterator blockIt, int bucket) {
   // move element pointed to by blockIt to beginning of list
   stack.splice(stack.begin(), stack, blockIt);
 
-  blockIt->incACount();
-  blockIt->bucket = 0;
+  (*blockIt)->incACount();
+  (*blockIt)->bucket = 0;
   // blockIt->ds_bucket = 0;
 
   if (RD_VERBOSE > 1)
     fprintf(stderr, " MOVED %p from bucket %d to top (aCount %lu)\n", a, bucket,
-            blockIt->getACount());
+            (*blockIt)->getACount());
 }
 
 // run stack simulation
@@ -313,10 +308,10 @@ void RD_accessBlock(Addr a) {
   if(a == a_last) {
     // increase bucket 0 and ds_bucket 0
     auto blockIt = stack.begin();
-    ds_num = blockIt->ds_num;
+    ds_num = (*blockIt)->ds_num;
     bucket = 0;
     ds_bucket = 0;
-    assert(blockIt->a == a);
+    assert((*blockIt)->a == a);
   } else {
   
     auto it = addrMap.find(a);
@@ -331,24 +326,24 @@ void RD_accessBlock(Addr a) {
       auto pair = it->second;
       auto blockIt = pair.first;
   
-      bucket = blockIt->bucket;
-      ds_num = blockIt->ds_num;
+      bucket = (*blockIt)->bucket;
+      ds_num = (*blockIt)->ds_num;
   
       // if not already on top of stack, move to top
       if (blockIt != stack.begin()) {
         moveBlockToTop(a, blockIt, bucket);
       } else {
-        blockIt->incACount();
+        (*blockIt)->incACount();
         if (RD_VERBOSE > 1)
           fprintf(stderr, " TOP %p accessed, bucket %d, aCount %lu\n", a, bucket,
-                  blockIt->getACount());
+                  (*blockIt)->getACount());
       }
   
       if (ds_num != DATASTRUCT_UNKNOWN) {
-        ds_bucket = pair.second->ds_bucket;
+        ds_bucket = (*(pair.second))->ds_bucket;
   
         // TODO:
-        // need list<reference_wrapper> for those asserts:
+        // need list<MemoryBlock*> for those asserts:
         // !list contains objects not references! => duplicates
         // assert(pair.second->ds_bucket == ds_bucket);
         // assert(pair.second->ds_num == ds_num);
@@ -605,6 +600,7 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
     bucket.print_csv("main");
   }
   
+  // cleanup : should be done elsewhere
   for(const auto& region : g_regions) {
     region.second->print_csv();
     delete region.second;

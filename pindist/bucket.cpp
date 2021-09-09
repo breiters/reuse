@@ -6,12 +6,13 @@
 #define CSV_FORMAT "%s,%p,%zu,%d,%lu,%s,%u,%lu,%lu,%lu\n"
 
 extern std::vector<datastruct_info> datastructs;
-extern std::list<MemoryBlock> stack;
+extern std::list<MemoryBlock *> stack;
 extern std::vector<CacheSim> cachesims;
 extern std::string application_name;
 
 static FILE *csv_out;
-static const char *csv_header = "region,datastruct,nbytes,line,ds_total_access_count,file_name,min,access_count,datastruct_access_count,datastruct_access_exclusive\n";
+static const char *csv_header = "region,datastruct,nbytes,line,ds_total_access_count,file_name,min,"
+  "access_count,datastruct_access_count,datastruct_access_exclusive\n";
 static bool is_print = false;
 
 Bucket::Bucket(int m) {

@@ -1,14 +1,13 @@
 #pragma once
 
-#include "dist.h"
+// #include "dist.h"
+#include "memoryblock.h"
 #include <list>
 #include <vector>
 
 using std::list;
 using std::vector;
 using Marker = std::list<MemoryBlock>::iterator;
-
-extern vector<Bucket> buckets;
 
 class CacheSim {
 private:

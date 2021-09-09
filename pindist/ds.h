@@ -2,6 +2,10 @@
 
 #include "pin.H"
 #include <iostream>
+#include <string>
+
+#define DATASTRUCT_UNKNOWN -1
+
 using std::cerr;
 using std::cout;
 using std::dec;
@@ -12,9 +16,10 @@ using std::hex;
 struct datastruct_info {
   VOID *address;
   size_t nbytes;
-  bool is_active;
   INT32 col;
   INT32 line;
+  unsigned long access_count = 0;
+  bool is_active;
   std::string allocator;
   std::string file_name;
 

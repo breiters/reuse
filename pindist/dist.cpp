@@ -1,70 +1,64 @@
-
 /* Calculation of a Stack Reuse Distance Histogram
  *
  * (C) 2015, Josef Weidendorfer / LRR-TUM
  * GPLv2+ (see COPYING)
  */
 
-#include "dist.h"
-#include "cachesim.h"
-#include "ds.h"
 
 #include <algorithm>
 // #include <bits/charconv.h>
 #include <cassert>
 #include <iostream>
 #include <list>
-#include <stdio.h>
+#include <cstdio>
 #include <unordered_map>
 #include <vector>
 
-#define DATASTRUCT_UNKNOWN -1
+#include "dist.h"
+#include "memoryblock.h"
+#include "cachesim.h"
+#include "ds.h"
+#include "bucket.h"
+#include "region.h"
+
+// #include "khash.h"
 
 using namespace std;
+
+// typedef list<std::shared_ptr<MemoryBlock>>::iterator Marker;
+typedef list<MemoryBlock>::iterator Marker;
 
 //-------------------------------------------------------------------------
 // Stack structure with MemoryBlock as element
 
 // TODO:
 // list<reference_wrapper<MemoryBlock>> stack;
+// list<MemoryBlock *> stack;
 list<MemoryBlock> stack;
-
-typedef list<MemoryBlock>::iterator Marker;
 
 vector<datastruct_info> datastructs;
 vector<CacheSim> cachesims;
-
 vector<Bucket> buckets;
+
 int nextBucket; // when stack is growing, we may enter this bucket
 
-// unordered_map<Addr,list<MemoryBlock>::iterator> addrMap;
-unordered_map<Addr, std::pair<Marker, Marker>> addrMap;
+// dummy class to provide custom hash object
+struct S { };
 
-#if MIN_BLOCKSTRUCT
-// generated on first access
-MemoryBlock::MemoryBlock(Addr a)
-    : bucket{0}, ds_bucket{0}, ds_num{DATASTRUCT_UNKNOWN} {}
-MemoryBlock::MemoryBlock(Addr a, int num)
-    : bucket{0}, ds_bucket{0}, ds_num{num}, a{a} {}
-#else
-// TODO
-#endif
-
-Bucket::Bucket(int m) {
-  aCount = 0;
-  min = m;
-  marker = stack.end();
+namespace std
+{
+    template<> struct hash<S>
+    {
+        std::size_t operator()(Addr const& s) const noexcept
+        {
+          // last 8 bits of Addr s are are zero if Memblocklen == 256...
+            return std::hash<void *>{}((Addr)(((uint64_t)s) >> 8));
+        }
+    };
 }
 
-void Bucket::register_datastruct() {
-  ds_aCount.push_back(0);
-  ds_aCount_excl.push_back(0);
-
-  assert(datastructs.size() > 0);
-  // TODO !?DOES NOT WORK HERE?!: (is done in CacheSim::move_markers instead)
-  // (push back a dummy marker)
-  ds_markers.push_back(cachesims[datastructs.size() - 1].stack().end());
-}
+// unordered_map<Addr, std::pair<Marker, Marker>> addrMap;
+unordered_map<Addr, std::pair<Marker, Marker>, std::hash<S>> addrMap;
 
 void register_datastruct(datastruct_info &info) {
   datastructs.push_back(info);
@@ -75,16 +69,18 @@ void register_datastruct(datastruct_info &info) {
     assert(bucket.ds_aCount.size() == datastructs.size());
     assert(bucket.ds_markers.size() == datastructs.size());
   }
+
+  for (auto &region : g_regions) {
+    region.second->register_datastruct();
+  }
 }
 
 // TODO: use better algorithm to get datastruct
 int get_ds_num(Addr addr) {
   int i = 0;
   for (auto &ds : datastructs) {
-    if ((ADDRINT)addr >= (ADDRINT)ds.address &&
-        (ADDRINT)addr < (ADDRINT)ds.address + (ADDRINT)ds.nbytes - 1) {
-      //  printf("datastructure accessed:\n");
-      //  ds.print();
+    if ((ADDRINT)addr >= (ADDRINT)ds.address
+        && (ADDRINT)addr < (ADDRINT)ds.address + (ADDRINT)ds.nbytes - 1) {
       return i;
     }
     i++;
@@ -96,16 +92,6 @@ int get_ds_num(Addr addr) {
 
 #if FUTURE_IMPROVED_HASH
 
-struct hashing_func {
-  unsigned long operator()(const Addr &addr) const {
-    unsigned long hash = 0;
-    return hash;
-  }
-};
-
-struct key_equal_fn {
-  bool operator()(const Addr &a1, const Addr &a2) const { return a1 == a2; }
-};
 //-------------------------------------------------------------------------
 // Specialization of unordered_map to use masking for bucket calculation
 struct _Mod_myrange_hashing {
@@ -116,8 +102,7 @@ struct _Mod_myrange_hashing {
   static std::size_t mask;
 
   _Mod_myrange_hashing() {}
-  // ??
-  // _Mod_myrange_hashing(const __detail::_Mod_range_hashing &temp) {}
+  _Mod_myrange_hashing(const __detail::_Mod_range_hashing &temp) {}
 
   result_type operator()(first_argument_type __num,
                          second_argument_type __den) const noexcept {
@@ -141,8 +126,6 @@ struct _Mod_myrange_hashing {
 
 std::size_t _Mod_myrange_hashing::mask = 1;
 
-// ?
-/*
 namespace std {
 template<typename _Alloc,
          typename _ExtractKey, typename _Equal,
@@ -168,7 +151,6 @@ public:
     using mySizeType = typename myBase::size_type;
 };
 }
-*/
 //-------------------------------------------------------------------------
 #endif
 
@@ -189,7 +171,7 @@ void RD_init(int min1) {
 // only specification of minimal distance required
 void RD_addBucket(unsigned int min) {
   // fprintf(stderr, "Add bucket with dist %d (last dist: %d)\n",
-  //   min, buckets[buckets.size()-2].min);
+    // min, buckets[buckets.size()-2].min);
   assert(buckets.size() > 2);
   assert(buckets[buckets.size() - 2].min < min);
 
@@ -260,7 +242,7 @@ int handleNewBlock(Addr a) {
 
   // new memory block
   stack.push_front(mb);
-  if (ds_num > DATASTRUCT_UNKNOWN) {
+  if (ds_num != DATASTRUCT_UNKNOWN) {
     it = cachesims[ds_num].on_new_block(mb);
     // it = cachesims[ds_num].stack().begin();
   }
@@ -320,51 +302,74 @@ void moveBlockToTop(Addr a, list<MemoryBlock>::iterator blockIt, int bucket) {
 // run stack simulation
 // To use a specific block size, ensure that <a> is aligned
 void RD_accessBlock(Addr a) {
+  static Addr a_last;
+
   int bucket; // bucket of current access
   int ds_bucket = 0;
   int ds_num;
-  auto it = addrMap.find(a);
-
-  if (it == addrMap.end()) {
-    ds_num = handleNewBlock(a);
-    bucket = buckets.size() - 1; // "infinite" distance, put in last bucket
-    ds_bucket = buckets.size() - 1;
-  } else {
-    // memory block already seen
-    auto pair = it->second;
-    auto blockIt = pair.first;
-
-    bucket = blockIt->bucket;
+  
+  // was memory block accessed before? --> don't need to search in hash map!
+  // memory block is on top of stack
+  if(a == a_last) {
+    // increase bucket 0 and ds_bucket 0
+    auto blockIt = stack.begin();
     ds_num = blockIt->ds_num;
+    bucket = 0;
+    ds_bucket = 0;
+    assert(blockIt->a == a);
+  } else {
+  
+    auto it = addrMap.find(a);
 
-    // if not already on top of stack, move to top
-    if (blockIt != stack.begin()) {
-      moveBlockToTop(a, blockIt, bucket);
+    if (it == addrMap.end()) {
+      // memory block not seen yet
+      ds_num = handleNewBlock(a);
+      bucket = buckets.size() - 1; // "infinite" distance, put in last bucket
+      ds_bucket = buckets.size() - 1;
     } else {
-      blockIt->incACount();
-      if (RD_VERBOSE > 1)
-        fprintf(stderr, " TOP %p accessed, bucket %d, aCount %lu\n", a, bucket,
-                blockIt->getACount());
-    }
-
-    if (ds_num > DATASTRUCT_UNKNOWN) {
-      ds_bucket = pair.second->ds_bucket;
-
-      // TODO:
-      // need list<reference_wrapper> for those asserts:
-      // !list contains objects not references! => duplicates
-      // assert(pair.second->ds_bucket == ds_bucket);
-      // assert(pair.second->ds_num == ds_num);
-      assert(ds_bucket < (int)buckets.size());
-
-      cachesims[ds_num].on_block_seen(pair.second);
+      // memory block already seen
+      auto pair = it->second;
+      auto blockIt = pair.first;
+  
+      bucket = blockIt->bucket;
+      ds_num = blockIt->ds_num;
+  
+      // if not already on top of stack, move to top
+      if (blockIt != stack.begin()) {
+        moveBlockToTop(a, blockIt, bucket);
+      } else {
+        blockIt->incACount();
+        if (RD_VERBOSE > 1)
+          fprintf(stderr, " TOP %p accessed, bucket %d, aCount %lu\n", a, bucket,
+                  blockIt->getACount());
+      }
+  
+      if (ds_num != DATASTRUCT_UNKNOWN) {
+        ds_bucket = pair.second->ds_bucket;
+  
+        // TODO:
+        // need list<reference_wrapper> for those asserts:
+        // !list contains objects not references! => duplicates
+        // assert(pair.second->ds_bucket == ds_bucket);
+        // assert(pair.second->ds_num == ds_num);
+        assert(ds_bucket < (int)buckets.size());
+  
+        cachesims[ds_num].on_block_seen(pair.second);
+      }
     }
   }
-  // global access count
+
+  if (ds_num != DATASTRUCT_UNKNOWN) {
+    datastructs[ds_num].access_count++;
+  }
+
+  a_last = a;
+
+  // global access count on bucket
   buckets[bucket].aCount++;
 
   // access count to datastructure
-  if (ds_num > DATASTRUCT_UNKNOWN) {
+  if (ds_num != DATASTRUCT_UNKNOWN) {
     assert(ds_bucket > -1);
     assert(ds_bucket <= (int)buckets.size() - 1);
     // assert(buckets[bucket].ds_markers_excl[ds_num]->ds_num == ds_num);
@@ -411,6 +416,7 @@ int RD_get_hist(unsigned int b, unsigned int &min, unsigned long &accessCount) {
   return b + 1;
 }
 
+// histogram for datastructures
 int RD_get_hist_ds(int ds_num, unsigned int b, unsigned int &min,
                    unsigned long &accessCount) {
   // if (RD_DEBUG) RD_checkConsistency();
@@ -524,12 +530,15 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
     b = bNext;
   } while (b != 0);
 
+#if 0
   // Datastructure prints
 
   int ds_num = 0;
   for (auto ds : datastructs) {
-    putchar('\n');
+    fprintf(out, "\n");
     ds.print();
+    fprintf(out, "  number of accesses to datastruct:     %lu\n", ds.access_count);
+    fprintf(out, "\n");
 
     bNext = RD_get_hist_ds(ds_num, 0, min, aCount);
     fprintf(out, "%s[%8.3f MB ..] %s ==>\n", pStr,
@@ -553,7 +562,7 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
       b = bNext;
     } while (b != 0);
 
-    puts("exclusive:");
+    fprintf(out, "exclusive:\n");
 
     bNext = RD_get_hist_ds_excl(ds_num, 0, min, aCount);
     fprintf(out, "%s[%8.3f MB ..] %s ==>\n", pStr,
@@ -579,6 +588,9 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
 
     ds_num++;
   }
+#endif
+
+  fprintf(out, "\n");
 
   RD_stat(stack_size, aCount);
 
@@ -588,4 +600,13 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
           "%s  number of accesses:     %lu\n",
           pStr, pStr, stack_size, ((double)stack_size * blockSize) / 1000000.0,
           pStr, aCount);
+
+  for(auto &bucket : buckets) {
+    bucket.print_csv("main");
+  }
+  
+  for(const auto& region : g_regions) {
+    region.second->print_csv();
+    delete region.second;
+  }
 }

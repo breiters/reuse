@@ -1,10 +1,9 @@
-CXX           := g++
+CXX           := g++-10
 TOOL_ROOTS    := pindist pintrace
-TOOL_CXXFLAGS += -std=c++11 #-DNDEBUG
+TOOL_CXXFLAGS += -std=c++11 -DNDEBUG -fno-inline
 
 CXXFLAGS=-O3 -fomit-frame-pointer -fno-strict-aliasing -std=c++11
 #CXXFLAGS=-g -O2 -std=c++11
-#CXXFLAGS=-g -O2 -std=c++11 -fno-inline -pg
 
 # ================================================================
 # Build the intermediate object files for pindist.
@@ -21,10 +20,26 @@ $(OBJDIR)ds$(OBJ_SUFFIX): ds.cpp ds.h
 $(OBJDIR)cachesim$(OBJ_SUFFIX): cachesim.cpp cachesim.h
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
+$(OBJDIR)bucket$(OBJ_SUFFIX): bucket.cpp bucket.h
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+$(OBJDIR)region$(OBJ_SUFFIX): region.cpp region.h
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
+$(OBJDIR)memoryblock$(OBJ_SUFFIX): memoryblock.cpp memoryblock.h
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
 # ================================================================
 # Build the pindist tool as a dll (shared object).
 # ================================================================
-$(OBJDIR)pindist$(PINTOOL_SUFFIX): $(OBJDIR)ds$(OBJ_SUFFIX) $(OBJDIR)cachesim$(OBJ_SUFFIX) $(OBJDIR)dist$(OBJ_SUFFIX) $(OBJDIR)pindist$(OBJ_SUFFIX)
+$(OBJDIR)pindist$(PINTOOL_SUFFIX): \
+		$(OBJDIR)ds$(OBJ_SUFFIX) \
+		$(OBJDIR)cachesim$(OBJ_SUFFIX) \
+		$(OBJDIR)dist$(OBJ_SUFFIX) \
+		$(OBJDIR)pindist$(OBJ_SUFFIX) \
+		$(OBJDIR)bucket$(OBJ_SUFFIX) \
+		$(OBJDIR)region$(OBJ_SUFFIX) \
+		$(OBJDIR)memoryblock$(OBJ_SUFFIX)
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 

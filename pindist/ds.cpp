@@ -2,9 +2,13 @@
 //  probes.  The replacement function has a different signature from that of the
 //  original replaced function.
 
+#include "bucket.h"
 #include "ds.h"
+#include "region.h"
 
+extern std::vector<Bucket> buckets;
 extern void register_datastruct(datastruct_info &info);
+std::string application_name;
 
 typedef VOID *(*FP_MALLOC)(size_t);
 // This is the replacement routine.
@@ -23,7 +27,7 @@ VOID *NewMalloc(FP_MALLOC orgFuncptr, UINT32 arg0, ADDRINT returnIp)
     LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col, &info.line, &info.file_name);
     PIN_UnlockClient();
 
-    // TODO: case file_name length == 0
+    // TODO: case file_name length == 0 ?
     if (info.file_name.length() > 0) {
         register_datastruct(info);
         // info.print();
@@ -113,17 +117,100 @@ INT32 NewPosixMemalign(fp_posix_memalign orgFuncptr, VOID **memptr, UINT64 arg0,
     return ret;
 }
 
+typedef void(*fp_pindist_start_stop)(char *);
+
+VOID PINDIST_start_region_(char *region) 
+{
+    auto reg = g_regions.find(region);
+
+    if (reg == g_regions.end()) {
+        g_regions[region] = new Region(region, buckets.size());
+        g_regions[region]->on_region_entry();
+    }
+    else {
+        reg->second->on_region_entry();
+    }
+}
+
+VOID New_PINDIST_start_region(fp_pindist_start_stop orgFuncptr, char *region, ADDRINT returnIp)
+{
+    PINDIST_start_region_(region);
+}
+
+VOID PINDIST_stop_region_(char *region) {
+    auto reg = g_regions.find(region);
+    assert(reg != g_regions.end());
+    if(reg != g_regions.end()) {
+        reg->second->on_region_exit();
+    }
+}
+
+VOID New_PINDIST_stop_region(fp_pindist_start_stop orgFuncptr, char *region, ADDRINT returnIp)
+{
+    PINDIST_stop_region_(region);
+}
+
 // Pin calls this function every time a new img is loaded.
 // It is best to do probe replacement when the image is loaded,
 // because only one thread knows about the image at this time.
 //
 VOID ImageLoad(IMG img, VOID *v)
 {
-
     // See if malloc() is present in the image.  If so, replace it.
     //
-    RTN rtn = RTN_FindByName(img, "malloc");
+    cout  << IMG_Name(img) << endl;
 
+    if(IMG_IsMainExecutable(img)) {
+        std::size_t found = IMG_Name(img).rfind('/');
+        if(found != std::string::npos) {
+            application_name = IMG_Name(img).substr(found + 1);
+        }
+        else {
+            application_name = IMG_Name(img);
+        }
+        cout << application_name << endl;
+
+        for( SEC sec= IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec) ) {
+            if(SEC_TYPE_EXEC != SEC_Type(sec)) continue; // LEVEL_CORE::SEC_TYPE
+            // printf("sec type: %d\n", (int)SEC_Type(sec));
+            for( RTN rtn= SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn) ) {
+                RTN_Open(rtn);
+                // do not insert call for functions that begin with __ or that contain @ or ...
+                printf("function: %s\n", RTN_Name(rtn).c_str());
+                if ((  RTN_Name(rtn).rfind('_', 0) == 0 && RTN_Name(rtn).rfind('Z', 1) != 1) // not mangled
+                    || RTN_Name(rtn).rfind("omp_", 0) == 0
+                    || RTN_Name(rtn).rfind("static_initialization_and_destruction") != std::string::npos 
+                    || RTN_Name(rtn).rfind('.', 0) == 0
+                    || RTN_Name(rtn).rfind('@') != std::string::npos 
+                    || RTN_Name(rtn).compare("main") == 0
+                    || RTN_Name(rtn).compare("register_tm_clones") == 0
+                    || RTN_Name(rtn).compare("deregister_tm_clones") == 0
+                    || RTN_Name(rtn).compare("frame_dummy") == 0
+                    || RTN_Name(rtn).rfind("PINDIST_start_region") != std::string::npos
+                    || RTN_Name(rtn).rfind("PINDIST_stop_region") != std::string::npos
+                    ) {
+                    RTN_Close(rtn);
+                    continue;
+                }
+                // application functions to not instrument: // TODO: remove in production
+                if (   RTN_Name(rtn).rfind("timer_") != std::string::npos
+                    || RTN_Name(rtn).rfind("wtime") != std::string::npos
+                    || RTN_Name(rtn).rfind("c_print_results") != std::string::npos
+                    || RTN_Name(rtn).rfind("alloc_") != std::string::npos
+                    || RTN_Name(rtn).rfind("verify") != std::string::npos
+                    ) {
+                    RTN_Close(rtn);
+                    continue;
+                }
+                printf("Instrumenting function: %s\n", RTN_Name(rtn).c_str());
+                RTN_InsertCall(rtn, IPOINT_BEFORE, (AFUNPTR)PINDIST_start_region_, IARG_PTR, RTN_Name(rtn).c_str(), IARG_END);
+                RTN_InsertCall(rtn, IPOINT_AFTER, (AFUNPTR)PINDIST_stop_region_, IARG_PTR, RTN_Name(rtn).c_str(), IARG_END);
+                RTN_Close(rtn);
+            }
+        }
+    }
+
+    RTN rtn = RTN_FindByName(img, "malloc");
 
     if (RTN_Valid(rtn)) {
         cout << "Replacing malloc in " << IMG_Name(img) << endl;
@@ -247,6 +334,66 @@ VOID ImageLoad(IMG img, VOID *v)
                              1,
                              IARG_RETURN_IP,
                              IARG_END);
+        // Free the function prototype.
+        //
+        PROTO_Free(proto_malloc);
+    }
+
+    rtn = RTN_FindByName(img, "PINDIST_start_region");
+
+    if (RTN_Valid(rtn)) {
+        cout << "Replacing PINDIST_start_region in " << IMG_Name(img) << endl;
+        // Define a function prototype that describes the application routine
+        // that will be replaced.
+        //
+        PROTO proto_malloc = PROTO_Allocate(PIN_PARG(void *),
+                                            CALLINGSTD_DEFAULT,
+                                            "PINDIST_start_region",
+                                            PIN_PARG(char *),
+                                            PIN_PARG_END());
+        // Replace the application routine with the replacement function.
+        // Additional arguments have been added to the replacement routine.
+        //
+        RTN_ReplaceSignature(rtn,
+                             AFUNPTR(New_PINDIST_start_region),
+                             IARG_PROTOTYPE,
+                             proto_malloc,
+                             IARG_ORIG_FUNCPTR,
+                             IARG_FUNCARG_ENTRYPOINT_VALUE,
+                             0,
+                             IARG_RETURN_IP,
+                             IARG_END);
+                             
+        // Free the function prototype.
+        //
+        PROTO_Free(proto_malloc);
+    }
+
+    rtn = RTN_FindByName(img, "PINDIST_stop_region");
+
+    if (RTN_Valid(rtn)) {
+        cout << "Replacing PINDIST_stop_region in " << IMG_Name(img) << endl;
+        // Define a function prototype that describes the application routine
+        // that will be replaced.
+        //
+        PROTO proto_malloc = PROTO_Allocate(PIN_PARG(void *),
+                                            CALLINGSTD_DEFAULT,
+                                            "PINDIST_stop_region",
+                                            PIN_PARG(char *),
+                                            PIN_PARG_END());
+        // Replace the application routine with the replacement function.
+        // Additional arguments have been added to the replacement routine.
+        //
+        RTN_ReplaceSignature(rtn,
+                             AFUNPTR(New_PINDIST_stop_region),
+                             IARG_PROTOTYPE,
+                             proto_malloc,
+                             IARG_ORIG_FUNCPTR,
+                             IARG_FUNCARG_ENTRYPOINT_VALUE,
+                             0,
+                             IARG_RETURN_IP,
+                             IARG_END);
+                             
         // Free the function prototype.
         //
         PROTO_Free(proto_malloc);

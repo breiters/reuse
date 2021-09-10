@@ -28,7 +28,7 @@ using namespace std;
 // Stack structure with MemoryBlock as element
 typedef list<MemoryBlock *>::iterator Marker;
 list<MemoryBlock *> stack;
-vector<Bucket> buckets;
+vector<Bucket> g_buckets;
 int nextBucket; // when stack is growing, we may enter this bucket
 
 // make sure that memblocks are powers of two
@@ -130,10 +130,10 @@ void RD_init(int min1) {
   g_datastructs.clear();
   // addrMap.rehash(4000000);
 
-  buckets.clear();
-  buckets.push_back(Bucket(0));    // bucket starting with distance 0
-  buckets.push_back(Bucket(min1)); // first real bucket of interest
-  buckets.push_back(Bucket(0));    // for "infinite" distance
+  g_buckets.clear();
+  g_buckets.push_back(Bucket(0));    // bucket starting with distance 0
+  g_buckets.push_back(Bucket(min1)); // first real bucket of interest
+  g_buckets.push_back(Bucket(0));    // for "infinite" distance
   nextBucket = 1;
 }
 
@@ -141,11 +141,11 @@ void RD_init(int min1) {
 // only specification of minimal distance required
 void RD_addBucket(unsigned int min) {
   // fprintf(stderr, "Add bucket with dist %d (last dist: %d)\n",
-  // min, buckets[buckets.size()-2].min);
-  assert(buckets.size() > 2);
-  assert(buckets[buckets.size() - 2].min < min);
+  // min, g_buckets[g_buckets.size()-2].min);
+  assert(g_buckets.size() > 2);
+  assert(g_buckets[g_buckets.size() - 2].min < min);
 
-  buckets.insert(buckets.end() - 1, Bucket(min));
+  g_buckets.insert(g_buckets.end() - 1, Bucket(min));
 }
 
 // do an internal consistency check
@@ -154,23 +154,23 @@ void RD_checkConsistency() {
   unsigned int d = 0;
   int b = 0;
   aCount1 = 0;
-  aCount2 = buckets[0].aCount;
+  aCount2 = g_buckets[0].aCount;
 
   if (RD_VERBOSE > 0) {
     fprintf(stderr, "\nChecking... (stack size: %lu)\n", stack.size());
     fprintf(stderr, "   START Bucket %d (min depth %u): aCount %lu\n", b,
-            buckets[b].min, buckets[b].aCount);
+            g_buckets[b].min, g_buckets[b].aCount);
   }
 
   Marker stackIt;
   for (stackIt = stack.begin(); stackIt != stack.end(); ++stackIt, ++d) {
-    if (d == buckets[b + 1].min) {
+    if (d == g_buckets[b + 1].min) {
       b++;
-      aCount2 += buckets[b].aCount;
+      aCount2 += g_buckets[b].aCount;
       if (RD_VERBOSE > 0)
         fprintf(stderr, "   START Bucket %d (min depth %u): aCount %lu\n", b,
-                buckets[b].min, buckets[b].aCount);
-      assert(stackIt == buckets[b].marker);
+                g_buckets[b].min, g_buckets[b].aCount);
+      assert(stackIt == g_buckets[b].marker);
     }
 
     if (RD_VERBOSE > 1) {
@@ -182,26 +182,26 @@ void RD_checkConsistency() {
     assert((*stackIt)->bucket == b);
   }
   assert(nextBucket = b + 1);
-  b = buckets.size() - 1;
-  aCount2 += buckets[b].aCount;
+  b = g_buckets.size() - 1;
+  aCount2 += g_buckets[b].aCount;
   if (RD_VERBOSE > 0) {
-    fprintf(stderr, "   Last Bucket %d: aCount %lu\n", b, buckets[b].aCount);
+    fprintf(stderr, "   Last Bucket %d: aCount %lu\n", b, g_buckets[b].aCount);
     fprintf(stderr, "   Total aCount: %u\n", aCount1);
   }
 #if MIN_BLOCKSTRUCT
-  assert(buckets[b].aCount == stack.size());
+  assert(g_buckets[b].aCount == stack.size());
 #else
-  assert(buckets[b].aCount == stack.size());
+  assert(g_buckets[b].aCount == stack.size());
   assert(aCount1 == aCount2);
 #endif
 }
 
 void moveMarkers(int topBucket) {
   for (int b = 1; b <= topBucket; b++) {
-    --buckets.at(b).marker;
-    (*(buckets.at(b).marker))->bucket++;
+    --g_buckets.at(b).marker;
+    (*(g_buckets.at(b).marker))->bucket++;
     if (RD_DEBUG)
-      assert((*(buckets[b].marker))->bucket == b);
+      assert((*(g_buckets[b].marker))->bucket == b);
   }
 }
 
@@ -227,26 +227,26 @@ int handleNewBlock(Addr a) {
   // move all markers of active buckets
   moveMarkers(nextBucket - 1);
 
-  bool next_bucket_active = addrMap.size() > buckets[nextBucket].min;
-  bool last_bucket_reached = buckets[nextBucket].min == 0;
+  bool next_bucket_active = addrMap.size() > g_buckets[nextBucket].min;
+  bool last_bucket_reached = g_buckets[nextBucket].min == 0;
 
 #if USE_OLD_CODE
   // does another bucket get active?
-  if (addrMap.size() <= buckets[nextBucket].min)
+  if (addrMap.size() <= g_buckets[nextBucket].min)
     return;
-  if (buckets[nextBucket].min == 0)
+  if (g_buckets[nextBucket].min == 0)
     return; // last bucket reached
 
   if (RD_VERBOSE > 0)
     fprintf(stderr, " ACTIVATE bucket %d (next bucket minimum depth %d)\n",
-            nextBucket, buckets[nextBucket + 1].min);
+            nextBucket, g_buckets[nextBucket + 1].min);
 #endif
 
   if (!last_bucket_reached && next_bucket_active) {
-    --buckets[nextBucket].marker; // set marker to last entry
-    (*(buckets[nextBucket].marker))->bucket++;
+    --g_buckets[nextBucket].marker; // set marker to last entry
+    (*(g_buckets[nextBucket].marker))->bucket++;
     // if (RD_DEBUG)
-    assert((*(buckets[nextBucket].marker))->bucket == nextBucket);
+    assert((*(g_buckets[nextBucket].marker))->bucket == nextBucket);
     nextBucket++;
   }
 
@@ -298,8 +298,8 @@ void RD_accessBlock(Addr a) {
     if (it == addrMap.end()) {
       // memory block not seen yet
       ds_num = handleNewBlock(a);
-      bucket = buckets.size() - 1; // "infinite" distance, put in last bucket
-      ds_bucket = buckets.size() - 1;
+      bucket = g_buckets.size() - 1; // "infinite" distance, put in last bucket
+      ds_bucket = g_buckets.size() - 1;
     } else {
       // memory block already seen
       auto pair = it->second;
@@ -336,16 +336,16 @@ void RD_accessBlock(Addr a) {
   a_last = a;
 
   // global access count on bucket
-  buckets[bucket].aCount++;
+  g_buckets[bucket].aCount++;
 
   // access count to datastructure
   if (ds_num != DATASTRUCT_UNKNOWN) {
     assert(ds_bucket > -1);
-    assert(ds_bucket <= (int)buckets.size() - 1);
-    // assert(buckets[bucket].ds_markers_excl[ds_num]->ds_num == ds_num);
+    assert(ds_bucket <= (int)g_buckets.size() - 1);
+    // assert(g_buckets[bucket].ds_markers_excl[ds_num]->ds_num == ds_num);
 
-    buckets[bucket].ds_aCount[ds_num]++;
-    buckets[ds_bucket].ds_aCount_excl[ds_num]++;
+    g_buckets[bucket].ds_aCount[ds_num]++;
+    g_buckets[ds_bucket].ds_aCount_excl[ds_num]++;
   }
 
   if (RD_DEBUG) {
@@ -365,7 +365,7 @@ void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
     RD_checkConsistency();
 
   unsigned long aCount = 0;
-  for (const Bucket &b : buckets)
+  for (const Bucket &b : g_buckets)
     aCount += b.aCount;
 
   stack_size = addrMap.size();
@@ -378,10 +378,10 @@ void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
 int RD_get_hist(unsigned int b, unsigned int &min, unsigned long &accessCount) {
   // if (RD_DEBUG) RD_checkConsistency();
 
-  assert((b >= 0) && (b < buckets.size()));
-  min = buckets[b].min;
-  accessCount = buckets[b].aCount;
-  if (b == buckets.size() - 1)
+  assert((b >= 0) && (b < g_buckets.size()));
+  min = g_buckets[b].min;
+  accessCount = g_buckets[b].aCount;
+  if (b == g_buckets.size() - 1)
     return 0;
   return b + 1;
 }
@@ -391,10 +391,10 @@ int RD_get_hist_ds(int ds_num, unsigned int b, unsigned int &min,
                    unsigned long &accessCount) {
   // if (RD_DEBUG) RD_checkConsistency();
 
-  assert((b >= 0) && (b < buckets.size()));
-  min = buckets[b].min;
-  accessCount = buckets[b].ds_aCount[ds_num];
-  if (b == buckets.size() - 1)
+  assert((b >= 0) && (b < g_buckets.size()));
+  min = g_buckets[b].min;
+  accessCount = g_buckets[b].ds_aCount[ds_num];
+  if (b == g_buckets.size() - 1)
     return 0;
   return b + 1;
 }
@@ -403,10 +403,10 @@ int RD_get_hist_ds_excl(int ds_num, unsigned int b, unsigned int &min,
                         unsigned long &accessCount) {
   // if (RD_DEBUG) RD_checkConsistency();
 
-  assert((b >= 0) && (b < buckets.size()));
-  min = buckets[b].min;
-  accessCount = buckets[b].ds_aCount_excl[ds_num];
-  if (b == buckets.size() - 1)
+  assert((b >= 0) && (b < g_buckets.size()));
+  min = g_buckets[b].min;
+  accessCount = g_buckets[b].ds_aCount_excl[ds_num];
+  if (b == g_buckets.size() - 1)
     return 0;
   return b + 1;
 }
@@ -572,7 +572,7 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
           pStr, pStr, stack_size, ((double)stack_size * blockSize) / 1000000.0,
           pStr, aCount);
 
-  for (auto &bucket : buckets) {
+  for (auto &bucket : g_buckets) {
     bucket.print_csv("main");
   }
 

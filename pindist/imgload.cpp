@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-extern std::vector<Bucket> buckets;
+// extern std::vector<Bucket> g_buckets;
 std::string g_application_name;
 
 //  Replace an original function with a custom function defined in the tool
@@ -131,7 +131,7 @@ VOID PINDIST_start_region_(char *region) {
   auto reg = g_regions.find(region);
 
   if (reg == g_regions.end()) {
-    g_regions[region] = new Region(region, buckets.size());
+    g_regions[region] = new Region(region, g_buckets.size());
     g_regions[region]->on_region_entry();
   } else {
     reg->second->on_region_entry();

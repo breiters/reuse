@@ -8,8 +8,6 @@ private:
   int next_bucket_;
   int datastruct_num_;
   std::list<MemoryBlock *> stack_;
-  // datastruct_info &datastruct;
-  // vector<Bucket> &buckets_;
 
   void move_markers(int);
   void on_next_bucket_gets_active();

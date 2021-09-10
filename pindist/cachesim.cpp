@@ -3,7 +3,7 @@
 #include "bucket.h"
 #include "cachesim.h"
 
-extern std::vector<Bucket> buckets;
+// extern std::vector<Bucket> g_buckets;
 
 std::vector<CacheSim> g_cachesims;
 std::vector<CacheSim> g_cachesims_combined;
@@ -11,21 +11,21 @@ std::vector<CacheSim> g_cachesims_negated;
 
 CacheSim::CacheSim(int datastruct_num)
     : next_bucket_{1}, datastruct_num_{datastruct_num} {}
-// buckets_{buckets}
+// buckets_{g_buckets}
 
 void CacheSim::on_next_bucket_gets_active() {
   // set new buckets marker to stack end first then set marker to last stack
   // element
-  buckets[next_bucket_].ds_markers[datastruct_num_] = stack_.end();
-  --(buckets[next_bucket_].ds_markers[datastruct_num_]);
+  g_buckets[next_bucket_].ds_markers[datastruct_num_] = stack_.end();
+  --(g_buckets[next_bucket_].ds_markers[datastruct_num_]);
 
-  assert(buckets[next_bucket_].ds_markers[datastruct_num_] != stack_.begin());
-  assert(buckets[next_bucket_].ds_markers[datastruct_num_] != stack_.end());
+  assert(g_buckets[next_bucket_].ds_markers[datastruct_num_] != stack_.begin());
+  assert(g_buckets[next_bucket_].ds_markers[datastruct_num_] != stack_.end());
 
   // last stack element is now in the next higher bucket
-  (*(buckets[next_bucket_].ds_markers[datastruct_num_]))->ds_bucket++;
+  (*(g_buckets[next_bucket_].ds_markers[datastruct_num_]))->ds_bucket++;
 
-  assert((*(buckets[next_bucket_].ds_markers[datastruct_num_]))->ds_bucket ==
+  assert((*(g_buckets[next_bucket_].ds_markers[datastruct_num_]))->ds_bucket ==
          next_bucket_);
 
   next_bucket_++;
@@ -44,8 +44,8 @@ const Marker CacheSim::on_new_block(MemoryBlock *mb) {
   move_markers(next_bucket_ - 1);
 
   // does another bucket get active?
-  bool last_bucket_reached = buckets[next_bucket_].min == 0;
-  bool next_bucket_active = stack_.size() > buckets[next_bucket_].min;
+  bool last_bucket_reached = g_buckets[next_bucket_].min == 0;
+  bool next_bucket_active = stack_.size() > g_buckets[next_bucket_].min;
 
   if (!last_bucket_reached && next_bucket_active) {
     on_next_bucket_gets_active();
@@ -78,18 +78,18 @@ void CacheSim::on_block_seen(const Marker &blockIt) {
 
 void CacheSim::move_markers(int topBucket) {
   for (int b = 1; b <= topBucket; b++) {
-    assert(buckets[b].ds_markers[datastruct_num_] != stack_.begin());
-    assert(buckets[b].ds_markers[datastruct_num_] != stack_.end());
+    assert(g_buckets[b].ds_markers[datastruct_num_] != stack_.begin());
+    assert(g_buckets[b].ds_markers[datastruct_num_] != stack_.end());
 
-    --(buckets[b].ds_markers[datastruct_num_]);
+    --(g_buckets[b].ds_markers[datastruct_num_]);
 
-    assert((int)buckets[b].ds_markers.size() > datastruct_num_);
+    assert((int)g_buckets[b].ds_markers.size() > datastruct_num_);
     assert(!stack_.empty());
-    assert(buckets[b].ds_markers[datastruct_num_] != stack_.begin());
-    assert(buckets[b].ds_markers[datastruct_num_] != stack_.end());
+    assert(g_buckets[b].ds_markers[datastruct_num_] != stack_.begin());
+    assert(g_buckets[b].ds_markers[datastruct_num_] != stack_.end());
 
-    (*(buckets[b].ds_markers[datastruct_num_]))->ds_bucket++;
+    (*(g_buckets[b].ds_markers[datastruct_num_]))->ds_bucket++;
 
-    // assert((buckets[b].marker)->ds_bucket == b); // TODO ??
+    // assert((g_buckets[b].marker)->ds_bucket == b); // TODO ??
   }
 }

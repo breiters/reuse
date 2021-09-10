@@ -1,6 +1,9 @@
 CXX           := g++
 TOOL_ROOTS    := pindist pintrace
-TOOL_CXXFLAGS += -std=c++14 -DNDEBUG -fomit-frame-pointer -fno-strict-aliasing #-fno-inline
+TOOL_CXXFLAGS += -std=c++14 -DNDEBUG #-fno-inline
+
+CXXFLAGS=-O3 -fomit-frame-pointer -fno-strict-aliasing -std=c++11
+#CXXFLAGS=-g -O2 -std=c++11
 
 # ================================================================
 # Build the intermediate object files for pindist.

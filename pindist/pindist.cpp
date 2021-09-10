@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
   double f = pow(2, 1.0 / s);
 
   RD_init((int)(d / MEMBLOCKLEN));
-  for(d*=f; d< 1024*1024*1024; d*=f) {
+  for (d *= f; d < 1024 * 1024 * 1024; d *= f) {
     // printf("add bucket: %d\n", (int)(d / MEMBLOCKLEN));
     RD_addBucket((int)(d / MEMBLOCKLEN));
   }
@@ -226,7 +226,7 @@ int main(int argc, char *argv[]) {
   // RD_addBucket(L2_capacity_per_way * 16 / MEMBLOCKLEN);
 
   stackAccesses = 0;
-  
+
   PIN_InitSymbols();
 
   INS_AddInstrumentFunction(Instruction, 0);

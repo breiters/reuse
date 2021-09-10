@@ -8,12 +8,13 @@
 #include <vector>
 
 std::vector<DatastructInfo> g_datastructs;
+// extern std::vector<Bucket> g_buckets;
 
 void register_datastruct(DatastructInfo &info) {
   g_datastructs.push_back(info);
   g_cachesims.push_back(CacheSim{static_cast<int>(g_datastructs.size()) - 1});
 
-  for (auto &bucket : buckets) {
+  for (auto &bucket : g_buckets) {
     bucket.register_datastruct();
     assert(bucket.ds_aCount.size() == g_datastructs.size());
     assert(bucket.ds_markers.size() == g_datastructs.size());

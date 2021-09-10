@@ -1,28 +1,23 @@
 #pragma once
 
-#include "pin.H"
-#include <iostream>
 #include <string>
+#include <vector>
+// #include "pin.H"
 
 #define DATASTRUCT_UNKNOWN -1
 
-using std::cerr;
-using std::cout;
-using std::dec;
-using std::endl;
-using std::flush;
-using std::hex;
-
-struct datastruct_info {
-  VOID *address;
+class DatastructInfo {
+public:
+  void *address;
   size_t nbytes;
-  INT32 col;
-  INT32 line;
+  int col;
+  int line;
   unsigned long access_count = 0;
-  bool is_active;
+  // bool is_active;
   std::string allocator;
   std::string file_name;
 
+/*
   inline void print(void) {
     cout << "============================\n";
     cout << "bytes allocated by " << allocator << "(): " << nbytes << '\n';
@@ -31,6 +26,14 @@ struct datastruct_info {
     cout << "located at address: " << hex << address << dec << '\n';
     cout << "============================\n";
   }
+*/
+
+  inline void print(void) { }
+
+private:
 };
 
-extern VOID ImageLoad(IMG img, VOID *v);
+extern void register_datastruct(DatastructInfo &info);
+extern int datstruct_num(Addr addr);
+
+extern std::vector<DatastructInfo> g_datastructs;

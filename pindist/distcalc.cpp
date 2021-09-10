@@ -45,6 +45,7 @@ int main(int argc, char* argv[])
   int doublingSteps = 0;
   const char* tracefile = 0;
   
+  // TODO: use getopt...
   for(arg=1; arg<argc; arg++) {
     if (argv[arg][0] == '-') {
       if (argv[arg][1] == 'h') usage(argv[0]);

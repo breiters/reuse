@@ -2,17 +2,12 @@
 
 #include "memoryblock.h"
 #include <list>
-// #include <vector>
-
-using std::list;
-// using std::vector;
-// using Marker = std::list<MemoryBlock>::iterator;
 
 class CacheSim {
 private:
   int next_bucket_;
   int datastruct_num_;
-  list<MemoryBlock *> stack_;
+  std::list<MemoryBlock *> stack_;
   // datastruct_info &datastruct;
   // vector<Bucket> &buckets_;
 
@@ -22,7 +17,11 @@ private:
 public:
   CacheSim(int);
   // ~CacheSim();
-  inline list<MemoryBlock *> &stack() { return stack_; }
+  inline std::list<MemoryBlock *> &stack() { return stack_; }
   const Marker on_new_block(MemoryBlock *);
   void on_block_seen(const Marker &);
 };
+
+extern std::vector<CacheSim> g_cachesims;
+extern std::vector<CacheSim> g_cachesims_combined;
+extern std::vector<CacheSim> g_cachesims_negated;

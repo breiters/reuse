@@ -5,6 +5,10 @@
 
 extern std::vector<Bucket> buckets;
 
+std::vector<CacheSim> g_cachesims;
+std::vector<CacheSim> g_cachesims_combined;
+std::vector<CacheSim> g_cachesims_negated;
+
 CacheSim::CacheSim(int datastruct_num)
     : next_bucket_{1}, datastruct_num_{datastruct_num} {}
 // buckets_{buckets}

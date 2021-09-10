@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 #include "dist.h"
-#include "ds.h"
+#include "imgload.h"
 
 // Consistency checks?
 #define DEBUG 0
@@ -28,10 +28,6 @@
 // collect addresses in chunk buffer before? (always worse)
 #define MERGE_CHUNK 0
 #define CHUNKSIZE 4096
-
-// must be a power-of-two
-#define MEMBLOCKLEN 256
-#define MEMBLOCK_MASK ~(MEMBLOCKLEN - 1)
 
 unsigned long stackAccesses;
 unsigned long ignoredReads, ignoredWrites;
@@ -192,49 +188,22 @@ INT32 Usage() {
   return -1;
 }
 
-#if 0
-VOID RtnCallPrint(CHAR * rtnName)
-{
-    std::cout << "Before run " << rtnName << endl;
-}
-
-
-// Pin calls this function every time a new rtn is executed
-VOID Routine(RTN rtn, VOID *v)
-{
-    if (!RTN_IsDynamic(rtn))
-    {
-        // std::cout << "not dynamic: " << RTN_Name(rtn) << endl;
-        return;
-    }
-
-    std::cout << "Just discovered " << RTN_Name(rtn) << endl;
-
-    RTN_Open(rtn);
-
-    // Insert a call at the entry point of a routine to increment the call count
-    RTN_InsertCall(rtn, IPOINT_BEFORE, (AFUNPTR)RtnCallPrint, IARG_ADDRINT, RTN_Name(rtn).c_str(), IARG_END);
-
-    RTN_Close(rtn);
-}
-#endif
-
 int main(int argc, char *argv[]) {
   if (PIN_Init(argc, argv))
     return Usage();
 
+#if USE_OLD_CODE
   // add buckets [0-1023], [1K - 2K-1], ... [1G - ]
-  [[maybe_unused]] double d = KnobMinDist.Value();
-  [[maybe_unused]] int s = KnobDoubleSteps.Value();
-  [[maybe_unused]] double f = pow(2, 1.0 / s);
+  double d = KnobMinDist.Value();
+  int s = KnobDoubleSteps.Value();
+  double f = pow(2, 1.0 / s);
 
-  /*
   RD_init((int)(d / MEMBLOCKLEN));
   for(d*=f; d< 1024*1024*1024; d*=f) {
     // printf("add bucket: %d\n", (int)(d / MEMBLOCKLEN));
     RD_addBucket((int)(d / MEMBLOCKLEN));
   }
-  */
+#endif
 
   // required buckets for a64fx:
   // 4-way L1d 64KiB => 4 Buckets with distance 64KiB / 4
@@ -246,19 +215,19 @@ int main(int argc, char *argv[]) {
   int L1d_capacity_per_way = 64 * KiB / 4;
   int L2_capacity_per_way = 8 * MiB / 16;
 
-  RD_init(1);
+  RD_init(4);
 
   // RD_init(L1d_capacity_per_way / MEMBLOCKLEN);
   for (int i = 0; i < 4; i++)
     RD_addBucket(L1d_capacity_per_way * (i + 1) / MEMBLOCKLEN);
-  for (int i = 0; i < 16; i++)
+  for (int i = 1; i < 16; i += 2)
     RD_addBucket(L2_capacity_per_way * (i + 1) / MEMBLOCKLEN);
 
+  // RD_addBucket(L2_capacity_per_way * 16 / MEMBLOCKLEN);
+
   stackAccesses = 0;
-
+  
   PIN_InitSymbols();
-
-  // RTN_AddInstrumentFunction(Routine, 0);
 
   INS_AddInstrumentFunction(Instruction, 0);
   PIN_AddFiniFunction(Exit, 0);

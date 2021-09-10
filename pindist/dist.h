@@ -8,6 +8,10 @@
 
 #include "memoryblock.h"
 
+// must be a power-of-two
+#define MEMBLOCKLEN 256
+#define MEMBLOCK_MASK ~(MEMBLOCKLEN - 1)
+
 // Assertions and consistency check?
 #define RD_DEBUG 0
 

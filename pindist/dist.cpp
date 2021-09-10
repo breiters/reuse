@@ -4,23 +4,22 @@
  * GPLv2+ (see COPYING)
  */
 
-
 #include <algorithm>
 // #include <bits/charconv.h>
 #include <cassert>
+#include <cstdio>
 #include <iostream>
 #include <list>
-#include <cstdio>
 #include <unordered_map>
 #include <vector>
 
+#include "bucket.h"
+#include "cachesim.h"
+#include "datastructs.h"
 #include "dist.h"
 #include "memoryblock.h"
-#include "cachesim.h"
-#include "ds.h"
-#include "bucket.h"
+#include "pin.H"
 #include "region.h"
-
 // #include "khash.h"
 
 using namespace std;
@@ -28,63 +27,43 @@ using namespace std;
 //-------------------------------------------------------------------------
 // Stack structure with MemoryBlock as element
 typedef list<MemoryBlock *>::iterator Marker;
-// list<MemoryBlock *> stack;
 list<MemoryBlock *> stack;
-
-vector<datastruct_info> datastructs;
-vector<CacheSim> cachesims;
 vector<Bucket> buckets;
-
 int nextBucket; // when stack is growing, we may enter this bucket
 
-// dummy class to provide custom hash object
-struct S { };
+// make sure that memblocks are powers of two
+static constexpr bool is_pow2(int a) { return !(a & (a - 1)); }
+static_assert(is_pow2(MEMBLOCKLEN));
 
-namespace std
-{
-    template<> struct hash<S>
-    {
-        std::size_t operator()(Addr const& s) const noexcept
-        {
-          // last 8 bits of Addr s are are zero if Memblocklen == 256...
-            return std::hash<void *>{}((Addr)(((uint64_t)s) >> 8));
-        }
-    };
+// find first bit set
+static constexpr int ffs_constexpr(int x) {
+  int n = 0;
+  while ((x & 1) == 0) {
+    x >>= 1;
+    n++;
+  }
+  return n;
 }
+static_assert(ffs_constexpr(256) == 8);
+static constexpr int first_set = ffs_constexpr(MEMBLOCKLEN);
+
+// dummy class to provide custom hash object
+struct S {};
+
+namespace std {
+template <> struct hash<S> {
+  std::size_t operator()(Addr const &s) const noexcept {
+    // last n bits of Addr s are all zero
+    // avoid collisions by having only keys that are multiples of MEMBLOCKLEN
+    return std::hash<Addr>{}((Addr)(((uint64_t)s) >> first_set));
+  }
+};
+} // namespace std
 
 // unordered_map<Addr, std::pair<Marker, Marker>> addrMap;
 unordered_map<Addr, std::pair<Marker, Marker>, std::hash<S>> addrMap;
 
-void register_datastruct(datastruct_info &info) {
-  datastructs.push_back(info);
-  cachesims.push_back(CacheSim{static_cast<int>(datastructs.size()) - 1});
-
-  for (auto &bucket : buckets) {
-    bucket.register_datastruct();
-    assert(bucket.ds_aCount.size() == datastructs.size());
-    assert(bucket.ds_markers.size() == datastructs.size());
-  }
-
-  for (auto &region : g_regions) {
-    region.second->register_datastruct();
-  }
-}
-
-// TODO: use better algorithm to get datastruct
-int get_ds_num(Addr addr) {
-  int i = 0;
-  for (auto &ds : datastructs) {
-    if ((ADDRINT)addr >= (ADDRINT)ds.address
-        && (ADDRINT)addr < (ADDRINT)ds.address + (ADDRINT)ds.nbytes - 1) {
-      return i;
-    }
-    i++;
-  }
-  return DATASTRUCT_UNKNOWN;
-}
-
 #define FUTURE_IMPROVED_HASH 0
-
 #if FUTURE_IMPROVED_HASH
 
 //-------------------------------------------------------------------------
@@ -122,37 +101,33 @@ struct _Mod_myrange_hashing {
 std::size_t _Mod_myrange_hashing::mask = 1;
 
 namespace std {
-template<typename _Alloc,
-         typename _ExtractKey, typename _Equal,
-         typename _H1, typename _Hash,
-         typename _RehashPolicy, typename _Traits>
+template <typename _Alloc, typename _ExtractKey, typename _Equal, typename _H1,
+          typename _Hash, typename _RehashPolicy, typename _Traits>
 
-class _Hashtable<Addr,  std::pair<const Addr, list<MemoryBlock>::iterator>,
-        _Alloc,_ExtractKey, _Equal,
-        _H1, __detail::_Mod_range_hashing, _Hash,
-        _RehashPolicy,  _Traits>
-        : public _Hashtable<Addr,
-        std::pair<const Addr, list<MemoryBlock>::iterator>,
-        _Alloc, _ExtractKey, _Equal, _H1, _Mod_myrange_hashing,
-        _Hash, _RehashPolicy, _Traits>
-{
+class _Hashtable<Addr, std::pair<const Addr, list<MemoryBlock>::iterator>,
+                 _Alloc, _ExtractKey, _Equal, _H1, __detail::_Mod_range_hashing,
+                 _Hash, _RehashPolicy, _Traits>
+    : public _Hashtable<Addr,
+                        std::pair<const Addr, list<MemoryBlock>::iterator>,
+                        _Alloc, _ExtractKey, _Equal, _H1, _Mod_myrange_hashing,
+                        _Hash, _RehashPolicy, _Traits> {
 public:
-    using myBase = _Hashtable<Addr,
-    std::pair<const Addr, list<MemoryBlock>::iterator>,
-    _Alloc, _ExtractKey, _Equal, _H1, _Mod_myrange_hashing,
-    _Hash, _RehashPolicy, _Traits>;
+  using myBase =
+      _Hashtable<Addr, std::pair<const Addr, list<MemoryBlock>::iterator>,
+                 _Alloc, _ExtractKey, _Equal, _H1, _Mod_myrange_hashing, _Hash,
+                 _RehashPolicy, _Traits>;
 
-    using myBase::_Hashtable;
-    using mySizeType = typename myBase::size_type;
+  using myBase::_Hashtable;
+  using mySizeType = typename myBase::size_type;
 };
-}
+} // namespace std
 //-------------------------------------------------------------------------
 #endif
 
 void RD_init(int min1) {
   stack.clear();
   addrMap.clear();
-  datastructs.clear();
+  g_datastructs.clear();
   // addrMap.rehash(4000000);
 
   buckets.clear();
@@ -166,7 +141,7 @@ void RD_init(int min1) {
 // only specification of minimal distance required
 void RD_addBucket(unsigned int min) {
   // fprintf(stderr, "Add bucket with dist %d (last dist: %d)\n",
-    // min, buckets[buckets.size()-2].min);
+  // min, buckets[buckets.size()-2].min);
   assert(buckets.size() > 2);
   assert(buckets[buckets.size() - 2].min < min);
 
@@ -231,15 +206,17 @@ void moveMarkers(int topBucket) {
 }
 
 int handleNewBlock(Addr a) {
-  int ds_num = get_ds_num(a);
+  int ds_num = datstruct_num(a);
+
+  // PIN stdlib port does not support shared_ptr...
+  // ... so we use raw pointers here and don't care for best practices
   MemoryBlock *mb = new MemoryBlock{a, ds_num};
   Marker it;
 
   // new memory block
   stack.push_front(mb);
   if (ds_num != DATASTRUCT_UNKNOWN) {
-    it = cachesims[ds_num].on_new_block(mb);
-    // it = cachesims[ds_num].stack().begin();
+    it = g_cachesims[ds_num].on_new_block(mb); // returns begin of stack
   }
 
   addrMap[a] = std::make_pair(stack.begin(), it);
@@ -297,23 +274,25 @@ void moveBlockToTop(Addr a, Marker blockIt, int bucket) {
 // run stack simulation
 // To use a specific block size, ensure that <a> is aligned
 void RD_accessBlock(Addr a) {
-  static Addr a_last;
+  [[maybe_unused]] static Addr a_last;
 
   int bucket; // bucket of current access
   int ds_bucket = 0;
   int ds_num;
-  
   // was memory block accessed before? --> don't need to search in hash map!
   // memory block is on top of stack
-  if(a == a_last) {
+  if (a == a_last) {
+  // if (0) {
     // increase bucket 0 and ds_bucket 0
     auto blockIt = stack.begin();
     ds_num = (*blockIt)->ds_num;
     bucket = 0;
     ds_bucket = 0;
+
+    // sanity check if address of memory block on top of stack is same as a:
     assert((*blockIt)->a == a);
   } else {
-  
+
     auto it = addrMap.find(a);
 
     if (it == addrMap.end()) {
@@ -325,37 +304,33 @@ void RD_accessBlock(Addr a) {
       // memory block already seen
       auto pair = it->second;
       auto blockIt = pair.first;
-  
+
       bucket = (*blockIt)->bucket;
       ds_num = (*blockIt)->ds_num;
-  
+
       // if not already on top of stack, move to top
       if (blockIt != stack.begin()) {
         moveBlockToTop(a, blockIt, bucket);
       } else {
         (*blockIt)->incACount();
         if (RD_VERBOSE > 1)
-          fprintf(stderr, " TOP %p accessed, bucket %d, aCount %lu\n", a, bucket,
-                  (*blockIt)->getACount());
+          fprintf(stderr, " TOP %p accessed, bucket %d, aCount %lu\n", a,
+                  bucket, (*blockIt)->getACount());
       }
-  
+
       if (ds_num != DATASTRUCT_UNKNOWN) {
         ds_bucket = (*(pair.second))->ds_bucket;
-  
-        // TODO:
-        // need list<MemoryBlock*> for those asserts:
-        // !list contains objects not references! => duplicates
-        // assert(pair.second->ds_bucket == ds_bucket);
-        // assert(pair.second->ds_num == ds_num);
-        assert(ds_bucket < (int)buckets.size());
-  
-        cachesims[ds_num].on_block_seen(pair.second);
+
+        // sanity check: make sure to refer to same memory blocks
+        // TODO: assert(*(pair.second) == );
+
+        g_cachesims[ds_num].on_block_seen(pair.second);
       }
     }
   }
 
   if (ds_num != DATASTRUCT_UNKNOWN) {
-    datastructs[ds_num].access_count++;
+    g_datastructs[ds_num].access_count++;
   }
 
   a_last = a;
@@ -525,14 +500,15 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
     b = bNext;
   } while (b != 0);
 
-#if 0
+#if PRINT_DATASTRUCT_TO_TERMINAL
   // Datastructure prints
 
   int ds_num = 0;
-  for (auto ds : datastructs) {
+  for (auto ds : g_datastructs) {
     fprintf(out, "\n");
     ds.print();
-    fprintf(out, "  number of accesses to datastruct:     %lu\n", ds.access_count);
+    fprintf(out, "  number of accesses to datastruct:     %lu\n",
+            ds.access_count);
     fprintf(out, "\n");
 
     bNext = RD_get_hist_ds(ds_num, 0, min, aCount);
@@ -596,12 +572,12 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
           pStr, pStr, stack_size, ((double)stack_size * blockSize) / 1000000.0,
           pStr, aCount);
 
-  for(auto &bucket : buckets) {
+  for (auto &bucket : buckets) {
     bucket.print_csv("main");
   }
-  
+
   // cleanup : should be done elsewhere
-  for(const auto& region : g_regions) {
+  for (const auto &region : g_regions) {
     region.second->print_csv();
     delete region.second;
   }

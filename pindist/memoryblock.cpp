@@ -1,5 +1,5 @@
 #include "memoryblock.h"
-#include "ds.h"
+#include "datastructs.h"
 
 #if MIN_BLOCKSTRUCT
 // generated on first access

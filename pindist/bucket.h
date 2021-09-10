@@ -21,7 +21,7 @@ public:
 
   void register_datastruct();
   void print_csv(const char *region);
-  void add_sub(const Bucket &other_add, const Bucket &other_sub);
+  void add_sub(const Bucket &addend, const Bucket &minuend);
 };
 
 extern std::vector<Bucket> g_buckets;

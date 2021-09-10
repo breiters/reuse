@@ -7,7 +7,7 @@
 
 #define CSV_FORMAT "%s,%p,%zu,%d,%lu,%s,%u,%lu,%lu,%lu\n"
 
-extern std::list<MemoryBlock *> stack;
+extern std::list<MemoryBlock *> g_stack;
 extern std::string g_application_name;
 
 static FILE *csv_out;
@@ -19,13 +19,12 @@ static bool is_print = false;
 Bucket::Bucket(int m) {
   aCount = 0;
   min = m;
-  marker = stack.end();
+  marker = g_stack.end();
 }
 
 void Bucket::add_sub(const Bucket &add, const Bucket &sub) {
   aCount += add.aCount - sub.aCount;
-  aCount += add.aCount - sub.aCount;
-  for (decltype(ds_aCount.size()) ds = 0; ds < ds_aCount.size(); ds++) {
+  for (size_t ds = 0; ds < ds_aCount.size(); ds++) {
     ds_aCount[ds] = add.ds_aCount[ds] - sub.ds_aCount[ds];
     ds_aCount_excl[ds] = add.ds_aCount_excl[ds] - sub.ds_aCount_excl[ds];
   }
@@ -36,8 +35,8 @@ void Bucket::register_datastruct() {
   ds_aCount_excl.push_back(0);
 
   assert(g_datastructs.size() > 0);
-  // TODO !?DOES NOT WORK HERE?!: (is done in CacheSim::move_markers instead)
-  // (push back a dummy marker)
+
+  // push back a dummy marker
   ds_markers.push_back(g_cachesims[g_datastructs.size() - 1].stack().end());
 }
 

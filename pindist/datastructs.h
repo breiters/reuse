@@ -2,7 +2,6 @@
 
 #include <string>
 #include <vector>
-// #include "pin.H"
 
 #define DATASTRUCT_UNKNOWN -1
 

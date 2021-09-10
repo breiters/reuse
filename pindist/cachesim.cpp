@@ -3,11 +3,10 @@
 #include "bucket.h"
 #include "cachesim.h"
 
-// extern std::vector<Bucket> g_buckets;
-
 std::vector<CacheSim> g_cachesims;
-std::vector<CacheSim> g_cachesims_combined;
 std::vector<CacheSim> g_cachesims_negated;
+std::vector<CacheSim> g_cachesims_combined;
+std::vector<CacheSim> g_cachesims_combined_negated;
 
 CacheSim::CacheSim(int datastruct_num)
     : next_bucket_{1}, datastruct_num_{datastruct_num} {}
@@ -35,8 +34,8 @@ void CacheSim::on_next_bucket_gets_active() {
  * @brief Adds new memory block to top of stack. Moves active bucket markers.
  * Adds next bucket if necessary.
  *
- * @param mb The memory block.
- * @return list<MemoryBlock>::iterator The stack begin iterator.
+ * @param mb The pointer to memory block.
+ * @return list<MemoryBlock *>::iterator The stack begin iterator.
  */
 const Marker CacheSim::on_new_block(MemoryBlock *mb) {
   stack_.push_front(mb);
@@ -81,6 +80,7 @@ void CacheSim::move_markers(int topBucket) {
     assert(g_buckets[b].ds_markers[datastruct_num_] != stack_.begin());
     assert(g_buckets[b].ds_markers[datastruct_num_] != stack_.end());
 
+    // decrement marker so it stays always on same distance to stack begin
     --(g_buckets[b].ds_markers[datastruct_num_]);
 
     assert((int)g_buckets[b].ds_markers.size() > datastruct_num_);
@@ -88,6 +88,7 @@ void CacheSim::move_markers(int topBucket) {
     assert(g_buckets[b].ds_markers[datastruct_num_] != stack_.begin());
     assert(g_buckets[b].ds_markers[datastruct_num_] != stack_.end());
 
+    // increment bucket of memory block where current marker points to
     (*(g_buckets[b].ds_markers[datastruct_num_]))->ds_bucket++;
 
     // assert((g_buckets[b].marker)->ds_bucket == b); // TODO ??

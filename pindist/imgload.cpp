@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-// extern std::vector<Bucket> g_buckets;
 std::string g_application_name;
 
 //  Replace an original function with a custom function defined in the tool

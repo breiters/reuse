@@ -58,30 +58,15 @@ void Region::on_region_entry() {
 
   // make snapshot of current buckets access counts
   region_buckets_on_entry_ = g_buckets;
-
 }
 
 void Region::on_region_exit() {
   // std::cout << "exit region: " << region_ << "\n";
-int b = 0;
-  // accumulate bucket difference (exit - entry) for access counts
+  size_t b = 0;
   for (Bucket &rb : region_buckets_) {
-    rb.aCount += g_buckets[b].aCount - region_buckets_on_entry_[b].aCount;
-    for (decltype(rb.ds_aCount.size()) ds = 0; ds < rb.ds_aCount.size(); ds++) {
-      rb.ds_aCount[ds] =
-          g_buckets[b].ds_aCount[ds] - region_buckets_on_entry_[b].ds_aCount[ds];
-      rb.ds_aCount_excl[ds] = g_buckets[b].ds_aCount_excl[ds] -
-                              region_buckets_on_entry_[b].ds_aCount_excl[ds];
-    }
+    rb.add_sub(g_buckets[b], region_buckets_on_entry_[b]);
     b++;
   }
-  /*
-size_t b = 0;
-for (Bucket &rb : region_buckets_) {
-  rb.add_sub(g_buckets[b], region_buckets_on_entry_[b]);
-  b++;
-}
-*/
 }
 
 void Region::print_csv() {

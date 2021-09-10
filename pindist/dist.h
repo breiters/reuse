@@ -7,6 +7,7 @@
 #pragma once
 
 #include "memoryblock.h"
+#include <vector>
 
 // must be a power-of-two
 #define MEMBLOCKLEN 256
@@ -45,3 +46,14 @@ int RD_get_hist(unsigned int bucket, unsigned int &min,
 // print nice ASCII histogram to <out>
 //  <pStr> is prefix for every line, distances scaled by <blockSize>
 void RD_printHistogram(FILE *out, const char *pStr, int blockSize);
+
+class MarkerContainer {
+public:
+  MarkerContainer(Marker, Marker);
+  MarkerContainer();
+  Marker global_marker;
+  Marker ds_marker;
+  //   std::vector<Marker> negate_markers;
+  //   std::vector<Marker> combine_markers;
+  //   std::vector<Marker> combine_negate_markers;
+};

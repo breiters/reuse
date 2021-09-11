@@ -9,13 +9,12 @@
 class Region {
 public:
   char *region_;
-  std::vector<Bucket> region_buckets_;
-  std::vector<Bucket> region_buckets_on_entry_;
+  std::vector<std::vector<Bucket>> region_buckets_;
+  std::vector<std::vector<Bucket>> region_buckets_on_entry_;
 
   Region(char *region, size_t num_buckets);
   ~Region();
   void register_datastruct();
-  void register_combined_datastruct();
   void on_region_entry();
   void on_region_exit();
   void print_csv(FILE *csv_out);

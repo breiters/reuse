@@ -63,10 +63,9 @@ template <> struct hash<S> {
 };
 } // namespace std
 
-#define NEW 1
+#define NEW 0
 
 unordered_map<Addr, MarkerContainer, std::hash<S>> g_addrMap;
-
 MarkerContainer::MarkerContainer() {}
 MarkerContainer::MarkerContainer(Marker g, Marker ds,
                                  std::vector<Marker> combine)
@@ -83,8 +82,6 @@ void moveMarkers(int topBucket) {
 
 int handleNewBlock(Addr addr) {
   int ds_num = datstruct_num(addr);
-
-
   // vector<int> a_in_ds = datstruct_nums(addr);
   // vector<int> a_not_in_ds = datstruct_nums(a);
 
@@ -101,27 +98,32 @@ int handleNewBlock(Addr addr) {
   if (ds_num != DATASTRUCT_UNKNOWN) {
     it = g_cachesims[ds_num].on_new_block(mb); // returns begin of stack
 #if NEW
+    puts("1");
     // account for access to combined dastructs
     for (auto &cs : g_cachesims_combined) {
       if (cs.contains(ds_num)) {
-        stack_begins.push_back(cs.on_new_block(mb));
+        puts("55555");
+        Marker i2 = cs.on_new_block(mb);
+        puts("66666");
+        stack_begins.push_back(i2);
+        puts("77777");
       }
     }
+    puts("2");
 #endif
   }
 
-      // puts("1");
   g_addrMap[addr] = MarkerContainer{g_stack.begin(), it, stack_begins};
 
   if (RD_VERBOSE > 1)
-    fprintf(stderr, " NEW block %p, now %lu blocks seen\n", addr, g_stack.size());
+    fprintf(stderr, " NEW block %p, now %lu blocks seen\n", addr,
+            g_stack.size());
 
   // move all markers of active buckets
   moveMarkers(g_nextBucket - 1);
-      // puts("2");
 
   bool next_bucket_active = g_addrMap.size() > g_buckets[g_nextBucket].min;
-  bool last_bucket_reached = g_buckets[g_nextBucket].min == BUCKET_INFINITE_DISTANCE;
+  bool last_bucket_reached = g_buckets[g_nextBucket].min == BUCKET_INF_DIST;
 
 #if USE_OLD_CODE
   if (RD_VERBOSE > 0)
@@ -136,7 +138,6 @@ int handleNewBlock(Addr addr) {
     assert((*(g_buckets[g_nextBucket].marker))->bucket == g_nextBucket);
     g_nextBucket++;
   }
-  // puts("3");
 
   return ds_num;
 }
@@ -166,7 +167,6 @@ void RD_accessBlock(Addr addr) {
   int bucket; // bucket of current access
   int ds_bucket = 0;
   int ds_num;
-  std::vector<std::pair<int, int>> buckets_combined;
 
   // was memory block accessed before? --> don't need to search in hash map!
   // memory block is on top of stack
@@ -179,6 +179,9 @@ void RD_accessBlock(Addr addr) {
 
     // sanity check if address of memory block on top of stack is same as a:
     assert((*g_stack.begin())->a == addr);
+    if (ds_num != DATASTRUCT_UNKNOWN) {
+      assert((*g_cachesims[ds_num].stack().begin())->a == addr);
+    }
   } else {
     auto it = g_addrMap.find(addr);
 
@@ -240,13 +243,15 @@ void RD_accessBlock(Addr addr) {
     assert(ds_bucket <= (int)g_buckets.size() - 1);
     // assert(g_buckets[bucket].ds_markers_excl[ds_num]->ds_num == ds_num);
 
-    g_buckets[bucket].accounting[ds_num].access_count++;
-    g_buckets[ds_bucket].accounting[ds_num].access_count_excl++;
+    // g_buckets[bucket].data[ds_num].access_count++;
+    // g_buckets[ds_bucket].data[ds_num].access_count_excl++;
+    g_cachesims[ds_num].buckets_[bucket].aCount++;
+    g_cachesims[ds_num].buckets_[ds_bucket].aCount_excl++;
 
 #if NEW
-    for(auto &pair : buckets_combined) {
-      g_buckets[bucket].accounting[pair.second].access_count++;
-      g_buckets[pair.first].accounting[pair.second].access_count_excl++;
+    for (auto &pair : buckets_combined) {
+      g_buckets[bucket].data[pair.second].access_count++;
+      g_buckets[pair.first].data[pair.second].access_count_excl++;
     }
 #endif
   }
@@ -271,8 +276,7 @@ void RD_init(int min1) {
   g_buckets.clear();
   g_buckets.push_back(Bucket(0));    // bucket starting with distance 0
   g_buckets.push_back(Bucket(min1)); // first real bucket of interest
-  g_buckets.push_back(
-      Bucket(BUCKET_INFINITE_DISTANCE)); // for "infinite" distance
+  g_buckets.push_back(Bucket(BUCKET_INF_DIST)); // for "infinite" distance
   g_nextBucket = 1;
 }
 

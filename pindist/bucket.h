@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#define BUCKET_INFINITE_DISTANCE 0
+#define BUCKET_INF_DIST 0
 
 class Bucket {
 public:
@@ -13,24 +13,9 @@ public:
   Bucket(int m);
 
   unsigned long aCount;
+  unsigned long aCount_excl;
   unsigned int min;
   Marker marker;
-
-  // one marker and (exclusive) access counter for each datastruct
-  // std::vector<unsigned long> ds_aCount;
-  // std::vector<unsigned long> ds_aCount_excl;
-  // std::vector<Marker> ds_markers;
-
-  struct AccessStats {
-    unsigned long access_count;
-    unsigned long access_count_excl;
-    // unsigned long access_count_other;
-    Marker marker;
-    // Marker marker_other;
-  };
-
-  std::vector<AccessStats> accounting;
-  std::vector<AccessStats> accounting_combined;
 
   void register_datastruct();
   void register_combined_datastruct();

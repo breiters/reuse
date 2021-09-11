@@ -1,5 +1,6 @@
 #include "region.h"
 #include "bucket.h"
+#include "cachesim.h"
 #include "datastructs.h"
 #include <cstring>
 #include <cxxabi.h>
@@ -25,63 +26,59 @@ Region::Region(char *region, size_t num_buckets) : region_{strdup(region)} {
 
   // b.print_csv("init");
 
+#if 0
   for (auto b : g_buckets) {
     b.aCount = 0;
-    /*
-    for (auto &a : b.ds_aCount) {
-      a = 0;
-    }
-    for (auto &a : b.ds_aCount_excl) {
-      a = 0;
-    }
-    */
-    for (auto &a : b.accounting) {
+    for (auto &a : b.data) {
       a.access_count = 0;
       a.access_count_excl = 0;
     }
     region_buckets_.push_back(b);
     region_buckets_on_entry_.push_back(b);
   }
+#endif
 }
 
 Region::~Region() {
   // std::cout << "free region: " << region_ << "\n";
+#if 0
   free(region_);
   region_ = nullptr;
+#endif
 }
 
 void Region::register_datastruct() {
-  for (auto &bucket : region_buckets_) {
-    bucket.register_datastruct();
-  }
-  for (auto &bucket : region_buckets_on_entry_) {
-    bucket.register_datastruct();
-  }
-}
-
-void Region::register_combined_datastruct() {
-  for (auto &bucket : region_buckets_) {
-    bucket.register_combined_datastruct();
-  }
-  for (auto &bucket : region_buckets_on_entry_) {
-    bucket.register_combined_datastruct();
-  }
+  region_buckets_.push_back(std::vector<Bucket>{g_buckets.size()});
+  region_buckets_on_entry_.push_back(std::vector<Bucket>{g_buckets.size()});
 }
 
 void Region::on_region_entry() {
   // std::cout << "entry region: " << region_ << "\n";
-
   // make snapshot of current buckets access counts
-  region_buckets_on_entry_ = g_buckets;
+  size_t i = 0;
+  for (auto &cs : g_cachesims) {
+    region_buckets_on_entry_[i] = cs.buckets_;
+    i++;
+  }
 }
 
 void Region::on_region_exit() {
   // std::cout << "exit region: " << region_ << "\n";
+  size_t i = 0;
+  for (auto &cs : g_cachesims) {
+    size_t j = 0;
+    for (auto &b : cs.buckets_)  {
+      region_buckets_[i][j].add_sub();
+    }
+    i++;
+  }
+#if 0
   size_t b = 0;
   for (Bucket &rb : region_buckets_) {
     rb.add_sub(g_buckets[b], region_buckets_on_entry_[b]);
     b++;
   }
+#endif
 }
 
 void Region::print_csv(FILE *csv_out) {

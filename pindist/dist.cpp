@@ -63,6 +63,8 @@ template <> struct hash<S> {
 };
 } // namespace std
 
+#define NEW 1
+
 unordered_map<Addr, MarkerContainer, std::hash<S>> g_addrMap;
 
 MarkerContainer::MarkerContainer() {}

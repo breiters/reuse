@@ -77,5 +77,13 @@ void Bucket::print_csv(const char *region, FILE *csv_out) {
     ds_num++;
   }
 
+  unsigned long i = 0;
+  for ([[maybe_unused]] auto &cs : g_cachesims_combined) {
+    fprintf(csv_out, CSV_FORMAT, region, (void *)i, (size_t)0, 0, 0UL, "combined", min, aCount,
+            accounting_combined[i].access_count,
+            accounting_combined[i].access_count_excl);
+    i++;
+  }
+
   fflush(csv_out);
 }

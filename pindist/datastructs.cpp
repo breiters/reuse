@@ -22,7 +22,7 @@ std::vector<DatastructInfo> g_datastructs;
 
   for ([[maybe_unused]] auto &ds : g_datastructs) {
     g_cachesims_combined.push_back(
-        CacheSim{static_cast<int>(g_cachesims_combined.size())});
+        CacheSim{static_cast<int>(g_cachesims_combined.size() - 1)});
     g_cachesims_combined.rbegin()->add_datastruct(ds1);
     g_cachesims_combined.rbegin()->add_datastruct(ds_num);
 
@@ -40,7 +40,7 @@ std::vector<DatastructInfo> g_datastructs;
 }
 
 void register_datastruct(DatastructInfo &info) {
-  // combine(static_cast<int>(g_datastructs.size()), 1);
+  combine(static_cast<int>(g_datastructs.size()), 1);
 
   g_datastructs.push_back(info);
   g_cachesims.push_back(CacheSim{static_cast<int>(g_datastructs.size()) - 1});

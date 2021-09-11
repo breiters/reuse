@@ -49,11 +49,12 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize);
 
 class MarkerContainer {
 public:
-  MarkerContainer(Marker, Marker);
+  // MarkerContainer(Marker, Marker);
+  MarkerContainer(Marker, Marker, std::vector<Marker>);
   MarkerContainer();
   Marker global_marker;
   Marker ds_marker;
-  //   std::vector<Marker> negate_markers;
-  //   std::vector<Marker> combine_markers;
+  std::vector<Marker> combine_markers;
+  // std::vector<Marker> negate_markers;
   //   std::vector<Marker> combine_negate_markers;
 };

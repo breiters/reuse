@@ -27,11 +27,17 @@ Region::Region(char *region, size_t num_buckets) : region_{strdup(region)} {
 
   for (auto b : g_buckets) {
     b.aCount = 0;
+    /*
     for (auto &a : b.ds_aCount) {
       a = 0;
     }
     for (auto &a : b.ds_aCount_excl) {
       a = 0;
+    }
+    */
+    for (auto &a : b.accounting) {
+      a.access_count = 0;
+      a.access_count_excl = 0;
     }
     region_buckets_.push_back(b);
     region_buckets_on_entry_.push_back(b);
@@ -53,6 +59,15 @@ void Region::register_datastruct() {
   }
 }
 
+void Region::register_combined_datastruct() {
+  for (auto &bucket : region_buckets_) {
+    bucket.register_combined_datastruct();
+  }
+  for (auto &bucket : region_buckets_on_entry_) {
+    bucket.register_combined_datastruct();
+  }
+}
+
 void Region::on_region_entry() {
   // std::cout << "entry region: " << region_ << "\n";
 
@@ -69,8 +84,8 @@ void Region::on_region_exit() {
   }
 }
 
-void Region::print_csv() {
+void Region::print_csv(FILE *csv_out) {
   for (auto &b : region_buckets_) {
-    b.print_csv(region_);
+    b.print_csv(region_, csv_out);
   }
 }

@@ -15,9 +15,10 @@ public:
   Region(char *region, size_t num_buckets);
   ~Region();
   void register_datastruct();
+  void register_combined_datastruct();
   void on_region_entry();
   void on_region_exit();
-  void print_csv();
+  void print_csv(FILE *csv_out);
 
 private:
 };

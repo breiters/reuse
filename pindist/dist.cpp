@@ -28,12 +28,13 @@ extern std::string g_application_name;
 
 //-------------------------------------------------------------------------
 // Stack structure with MemoryBlock* as element
-typedef list<MemoryBlock *>::iterator Marker;
-list<MemoryBlock *> g_stack;
+typedef list<MemoryBlock>::iterator Marker;
+
+list<MemoryBlock> g_stack;
 vector<Bucket> g_buckets;
 int g_nextBucket; // when stack is growing, we may enter this bucket
 
-// CacheSim g_cachesim{-1};
+CacheSim g_cachesim{-1};
 
 // make sure that memblocks are powers of two
 static constexpr bool is_pow2(int a) { return !(a & (a - 1)); }
@@ -63,31 +64,35 @@ template <> struct hash<S> {
 };
 } // namespace std
 
-#define NEW 0
+struct MarkerContainer {
+  MarkerContainer(Marker, Marker, std::vector<Marker>);
+  MarkerContainer();
+  Marker global_marker;
+  Marker ds_marker;
+  std::vector<Marker> combine_markers;
+};
 
 unordered_map<Addr, MarkerContainer, std::hash<S>> g_addrMap;
+
 MarkerContainer::MarkerContainer() {}
-MarkerContainer::MarkerContainer(Marker g, Marker ds,
-                                 std::vector<Marker> combine)
+MarkerContainer::MarkerContainer(Marker g, Marker ds, std::vector<Marker> combine)
     : global_marker{g}, ds_marker{ds}, combine_markers{combine} {};
 
 void moveMarkers(int topBucket) {
   for (int b = 1; b <= topBucket; b++) {
     --g_buckets.at(b).marker;
-    (*(g_buckets.at(b).marker))->bucket++;
+    (g_buckets.at(b).marker)->bucket++;
     if (RD_DEBUG)
-      assert((*(g_buckets[b].marker))->bucket == b);
+      assert((g_buckets[b].marker)->bucket == b);
   }
 }
 
 int handleNewBlock(Addr addr) {
   int ds_num = datstruct_num(addr);
-  // vector<int> a_in_ds = datstruct_nums(addr);
-  // vector<int> a_not_in_ds = datstruct_nums(a);
 
   // PIN stdlib port does not support shared_ptr...
   // ... so we use raw pointers here and don't care for best practices
-  MemoryBlock *mb = new MemoryBlock{addr, ds_num};
+  MemoryBlock mb = MemoryBlock{addr, ds_num};
 
   Marker it;
   std::vector<Marker> stack_begins;
@@ -97,20 +102,14 @@ int handleNewBlock(Addr addr) {
 
   if (ds_num != DATASTRUCT_UNKNOWN) {
     it = g_cachesims[ds_num].on_new_block(mb); // returns begin of stack
-#if NEW
-    puts("1");
     // account for access to combined dastructs
+    int i = 0;
     for (auto &cs : g_cachesims_combined) {
       if (cs.contains(ds_num)) {
-        puts("55555");
-        Marker i2 = cs.on_new_block(mb);
-        puts("66666");
-        stack_begins.push_back(i2);
-        puts("77777");
+        stack_begins.push_back(cs.on_new_block(mb));
       }
+      i++;
     }
-    puts("2");
-#endif
   }
 
   g_addrMap[addr] = MarkerContainer{g_stack.begin(), it, stack_begins};
@@ -133,12 +132,11 @@ int handleNewBlock(Addr addr) {
 
   if (!last_bucket_reached && next_bucket_active) {
     --g_buckets[g_nextBucket].marker; // set marker to last entry
-    (*(g_buckets[g_nextBucket].marker))->bucket++;
+    (g_buckets[g_nextBucket].marker)->bucket++;
     // if (RD_DEBUG)
-    assert((*(g_buckets[g_nextBucket].marker))->bucket == g_nextBucket);
+    assert((g_buckets[g_nextBucket].marker)->bucket == g_nextBucket);
     g_nextBucket++;
   }
-
   return ds_num;
 }
 
@@ -151,13 +149,16 @@ void moveBlockToTop(Addr addr, Marker blockIt, int bucket) {
   // move element pointed to by blockIt to beginning of list
   g_stack.splice(g_stack.begin(), g_stack, blockIt);
 
-  (*blockIt)->incACount();
-  (*blockIt)->bucket = 0;
+  blockIt->incACount();
+  blockIt->bucket = 0;
 
   if (RD_VERBOSE > 1)
     fprintf(stderr, " MOVED %p from bucket %d to top (aCount %lu)\n", addr,
-            bucket, (*blockIt)->getACount());
+            bucket, blockIt->getACount());
 }
+
+// TODO: do not check more than one time if an address is in a CacheSim
+// std::vector<bool> is_in;
 
 // run stack simulation
 // To use a specific block size, ensure that <a> is aligned
@@ -168,19 +169,22 @@ void RD_accessBlock(Addr addr) {
   int ds_bucket = 0;
   int ds_num;
 
+  vector<int> ds_buckets_combined;
+
+  // bool accessed_before = (addr == addr_last);
   // was memory block accessed before? --> don't need to search in hash map!
   // memory block is on top of stack
-  if (addr == addr_last) {
-    // if (0) { // TODO
+  // if (addr == addr_last) {
+  if (0) { // TODO
     // increase bucket 0 and ds_bucket 0
-    ds_num = (*g_stack.begin())->ds_num;
+    ds_num = g_stack.begin()->ds_num;
     bucket = 0;
     ds_bucket = 0;
 
     // sanity check if address of memory block on top of stack is same as a:
-    assert((*g_stack.begin())->a == addr);
+    assert(g_stack.begin()->a == addr);
     if (ds_num != DATASTRUCT_UNKNOWN) {
-      assert((*g_cachesims[ds_num].stack().begin())->a == addr);
+      assert(g_cachesims[ds_num].stack().begin()->a == addr);
     }
   } else {
     auto it = g_addrMap.find(addr);
@@ -196,35 +200,37 @@ void RD_accessBlock(Addr addr) {
       auto markers = it->second;
       auto blockIt = markers.global_marker;
 
-      bucket = (*blockIt)->bucket;
-      ds_num = (*blockIt)->ds_num;
-
+      bucket = blockIt->bucket;
+      ds_num = blockIt->ds_num;
+  
       // if not already on top of stack, move to top
       if (blockIt != g_stack.begin()) {
         moveBlockToTop(addr, blockIt, bucket);
       } else {
-        (*blockIt)->incACount();
+        blockIt->incACount();
         if (RD_VERBOSE > 1)
           fprintf(stderr, " TOP %p accessed, bucket %d, aCount %lu\n", addr,
-                  bucket, (*blockIt)->getACount());
+                  bucket, blockIt->getACount());
       }
+
       if (ds_num != DATASTRUCT_UNKNOWN) {
-        ds_bucket = (*(markers.ds_marker))->ds_bucket;
+        ds_bucket = (markers.ds_marker)->bucket;
+
         g_cachesims[ds_num].on_block_seen(markers.ds_marker);
 
-#if NEW
         int cs_num = 0;
         int i = 0;
         for (auto &cs : g_cachesims_combined) {
           if (cs.contains(ds_num)) {
-            buckets_combined.push_back(std::make_pair(
-                (*markers.combine_markers[i])->ds_bucket, cs_num));
+            // buckets_combined.push_back(std::make_pair(
+            // (*markers.combine_markers[i])->ds_bucket, cs_num));
+            ds_buckets_combined.push_back(
+                (markers.combine_markers[i])->bucket);
             cs.on_block_seen(markers.combine_markers[i]);
             i++;
           }
           cs_num++;
         }
-#endif
       }
     }
   }
@@ -235,25 +241,40 @@ void RD_accessBlock(Addr addr) {
   // global access count on bucket
   g_buckets[bucket].aCount++;
 
+  assert(bucket <= (int)g_buckets.size() - 1);
+
   // access count to datastructure
   if (ds_num != DATASTRUCT_UNKNOWN) {
     g_datastructs[ds_num].access_count++;
-    // TODO:
     assert(ds_bucket > -1);
     assert(ds_bucket <= (int)g_buckets.size() - 1);
-    // assert(g_buckets[bucket].ds_markers_excl[ds_num]->ds_num == ds_num);
 
-    // g_buckets[bucket].data[ds_num].access_count++;
-    // g_buckets[ds_bucket].data[ds_num].access_count_excl++;
-    g_cachesims[ds_num].buckets_[bucket].aCount++;
-    g_cachesims[ds_num].buckets_[ds_bucket].aCount_excl++;
+    g_cachesims[ds_num].buckets()[bucket].aCount++;
+    g_cachesims[ds_num].buckets()[ds_bucket].aCount_excl++;
 
-#if NEW
-    for (auto &pair : buckets_combined) {
-      g_buckets[bucket].data[pair.second].access_count++;
-      g_buckets[pair.first].data[pair.second].access_count_excl++;
+    // TODO: CAREFULL IF VECTOR IS EMPTY WHEN A == A_LAST!!!
+
+    if (ds_buckets_combined.size() == 0) {
+      for (auto &cs : g_cachesims_combined) {
+        if (cs.contains(ds_num)) {
+          // case: infinite distance
+          cs.buckets()[g_buckets.size() - 1].aCount++;
+          cs.buckets()[g_buckets.size() - 1].aCount_excl++;
+        }
+      }
+    } else {
+
+      int i = 0;
+      for (auto &cs : g_cachesims_combined) {
+        if (cs.contains(ds_num)) {
+          assert(ds_buckets_combined[i] > -1);
+          assert(ds_buckets_combined[i] < (int)g_buckets.size() - 1);
+          cs.buckets()[bucket].aCount++;
+          cs.buckets()[ds_buckets_combined[i]].aCount_excl++;
+          i++;
+        }
+      }
     }
-#endif
   }
 
   if (RD_DEBUG) {
@@ -265,6 +286,46 @@ void RD_accessBlock(Addr addr) {
       checkCount = 0;
     }
   }
+}
+
+#define CSV_FORMAT "%s,%d,%p,%zu,%d,%lu,%s,%u,%lu,%lu,%lu\n"
+
+void RD_print_csv() {
+  const char *csv_header =
+      "region,datastruct,addr,nbytes,line,ds_total_access_count,file_name,min,"
+      "access_count,datastruct_access_count,datastruct_access_exclusive\n";
+
+  constexpr size_t FILENAME_SIZE = 256;
+  char csv_filename[FILENAME_SIZE];
+  snprintf(csv_filename, FILENAME_SIZE, "pindist.%s.csv",
+           g_application_name.c_str());
+  FILE *csv_out = fopen(csv_filename, "w");
+  fprintf(csv_out, "%s", csv_header);
+
+  g_buckets.back().min = std::numeric_limits<decltype(g_buckets.back().min)>::max();
+  for (auto &b : g_buckets) {
+    fprintf(csv_out, CSV_FORMAT, "main", -1, (void *)0x0, (size_t)0, 0, 0UL,
+            "main", b.min, b.aCount, 0UL, 0UL);
+  }
+
+  for (auto &cs : g_cachesims) {
+    cs.print_csv(csv_out, "main");
+  }
+
+  for (auto &cs : g_cachesims_combined) {
+    cs.print_csv(csv_out, "main");
+  }
+
+  // cleanup : should be done elsewhere
+  for (const auto &region : g_regions) {
+    region.second->print_csv(csv_out);
+  }
+
+  for (auto &region : g_regions) {
+    delete region.second;
+  }
+
+  fclose(csv_out);
 }
 
 void RD_init(int min1) {
@@ -412,29 +473,6 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
           "%s  number of accesses:     %lu\n",
           pStr, pStr, stack_size, ((double)stack_size * blockSize) / 1000000.0,
           pStr, aCount);
-
-  const char *csv_header =
-      "region,datastruct,nbytes,line,ds_total_access_count,file_name,min,"
-      "access_count,datastruct_access_count,datastruct_access_exclusive\n";
-
-  constexpr size_t FILENAME_SIZE = 256;
-  char csv_filename[FILENAME_SIZE];
-  snprintf(csv_filename, FILENAME_SIZE, "pindist.%s.csv",
-           g_application_name.c_str());
-  FILE *csv_out = fopen(csv_filename, "w");
-  fprintf(csv_out, "%s", csv_header);
-
-  for (auto &bucket : g_buckets) {
-    bucket.print_csv("main", csv_out);
-  }
-
-  // cleanup : should be done elsewhere
-  for (const auto &region : g_regions) {
-    region.second->print_csv(csv_out);
-    delete region.second;
-  }
-
-  fclose(csv_out);
 }
 
 #define FUTURE_IMPROVED_HASH 0
@@ -525,11 +563,11 @@ void RD_checkConsistency() {
 
     if (RD_VERBOSE > 1) {
       static char b[100];
-      (*stackIt)->print(b);
+      stackIt->print(b);
       fprintf(stderr, "   %5d: %s\n", d, b);
     }
-    aCount1 += (*stackIt)->getACount();
-    assert((*stackIt)->bucket == b);
+    aCount1 += stackIt->getACount();
+    assert(stackIt->bucket == b);
   }
   assert(g_nextBucket = b + 1);
   b = g_buckets.size() - 1;

@@ -21,7 +21,6 @@ public:
   inline unsigned long getACount() { return 1; }
 
   int bucket;    // current bucket
-  int ds_bucket; // current bucket if datastructure had exclusive cache
   int ds_num;    // datastructure it belongs to
 
   Addr a;
@@ -48,4 +47,4 @@ private:
 };
 #endif
 
-using Marker = std::list<MemoryBlock *>::iterator;
+using Marker = std::list<MemoryBlock>::iterator;

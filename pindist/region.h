@@ -4,15 +4,18 @@
 #include <unordered_map>
 #include <vector>
 
+#include "cachesim.h"
 #include "bucket.h"
 
 class Region {
 public:
   char *region_;
-  std::vector<std::vector<Bucket>> region_buckets_;
-  std::vector<std::vector<Bucket>> region_buckets_on_entry_;
+  std::vector<Bucket *> region_buckets_;
+  std::vector<Bucket *> region_buckets_on_entry_;
+  // std::unordered_map<CacheSim, std::vector<Bucket>> region_buckets_;
+  // std::unordered_map<CacheSim, std::vector<Bucket>> region_buckets_on_entry_;
 
-  Region(char *region, size_t num_buckets);
+  Region(char *region);
   ~Region();
   void register_datastruct();
   void on_region_entry();
@@ -24,4 +27,4 @@ private:
 
 // TODO: should use some smart pointer here but PIN stl port does not really
 // provide it... ?!
-extern std::unordered_map<void *, Region *> g_regions;
+extern std::unordered_map<char *, Region *> g_regions;

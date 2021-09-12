@@ -130,7 +130,7 @@ VOID PINDIST_start_region_(char *region) {
   auto reg = g_regions.find(region);
 
   if (reg == g_regions.end()) {
-    g_regions[region] = new Region(region, g_buckets.size());
+    g_regions[region] = new Region(region);
     g_regions[region]->on_region_entry();
   } else {
     reg->second->on_region_entry();

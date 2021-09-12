@@ -176,6 +176,8 @@ VOID Exit(INT32 code, VOID *v) {
 
   fprintf(out, "%s  ignored accesses by thread != 0: %lu reads, %lu writes\n",
           pStr, ignoredReads, ignoredWrites);
+
+  RD_print_csv();
 }
 
 /* ===================================================================== */

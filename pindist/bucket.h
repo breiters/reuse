@@ -17,9 +17,6 @@ public:
   unsigned int min;
   Marker marker;
 
-  void register_datastruct();
-  void register_combined_datastruct();
-  void print_csv(const char *region, FILE *csv_out);
   void add_sub(const Bucket &addend, const Bucket &minuend);
 };
 

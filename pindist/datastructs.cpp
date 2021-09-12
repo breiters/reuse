@@ -10,9 +10,8 @@
 std::vector<DatastructInfo> g_datastructs;
 // extern std::vector<Bucket> g_buckets;
 
-#if 0
 // combine 1 level
-[[maybe_unused]] static void combine(int ds_num, [[maybe_unused]] int level) {
+static void combine(int ds_num, [[maybe_unused]] int level) {
   static bool first = true;
   if (first) {
     first = false;
@@ -22,40 +21,19 @@ std::vector<DatastructInfo> g_datastructs;
   int ds1 = 0;
 
   for ([[maybe_unused]] auto &ds : g_datastructs) {
+    printf("combining: %d, %d dsnum: %d\n", ds1, ds_num, (int)g_cachesims_combined.size());
     g_cachesims_combined.push_back(
-        CacheSim{static_cast<int>(g_cachesims_combined.size() - 1)});
+        CacheSim{static_cast<int>(g_cachesims_combined.size())});
     g_cachesims_combined.rbegin()->add_datastruct(ds1);
     g_cachesims_combined.rbegin()->add_datastruct(ds_num);
-
-    printf("combining: %d, %d\n", ds1, ds_num);
-
-    for (auto &bucket : g_buckets) {
-      bucket.register_combined_datastruct();
-    }
-
-    for (auto &region : g_regions) {
-      region.second->register_combined_datastruct();
-    }
     ds1++;
   }
 }
-#endif
 
 void register_datastruct(DatastructInfo &info) {
-  // combine(static_cast<int>(g_datastructs.size()), 1);
-
+  combine(static_cast<int>(g_datastructs.size()), 1);
   g_datastructs.push_back(info);
   g_cachesims.push_back(CacheSim{static_cast<int>(g_datastructs.size()) - 1});
-
-#if 0
-  for (auto &bucket : g_buckets) {
-    bucket.register_datastruct();
-  }
-
-  for (auto &region : g_regions) {
-    region.second->register_datastruct();
-  }
-#endif
 }
 
 // TODO: use better algorithm to get datastruct

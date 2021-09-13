@@ -23,6 +23,7 @@ public:
   void register_datastruct();
   void on_region_entry();
   void on_region_exit();
+  void demangle_name();
   void print_csv(FILE *csv_out);
 
 private:

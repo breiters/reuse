@@ -7,26 +7,11 @@
 #include <cxxabi.h>
 #include <iostream>
 
-/** TODO: COUNT FOR G_BUCKETS TOO **/
+/** TODO: REMOVE RAW PTR AND USE vector OR unordered_map FOR SNAPSHOTS **/
 
 std::unordered_map<char *, Region *> g_regions;
 
 Region::Region(char *region) : region_{strdup(region)} {
-#if 0
-	int status = -1;
-	char *demangled_name = abi::__cxa_demangle(region, NULL, NULL, &status);
-	// printf("Demangled: %s\n", demangled_name);
-
-    // set region name to the demangled name without arguments if it was a mangled function
-    if(nullptr != demangled_name) {
-        region_ = demangled_name;
-        strtok(region_, "(");
-    } else {
-        region_ = strdup(region);
-    }
-    std::cout << "new region: " << region_ << "\n";
-#endif
-
   // add region buckets for every CacheSim
   // init with zero
   region_buckets_.reserve(g_cachesims.size() + g_cachesims_combined.size());
@@ -39,6 +24,20 @@ Region::Region(char *region) : region_{strdup(region)} {
   for (auto &cs : g_cachesims_combined) {
     region_buckets_.push_back(new Bucket[cs.buckets().size()]()); // zero
   }
+}
+
+void Region::demangle_name() {
+	int status = -1;
+	char *demangled_name = abi::__cxa_demangle(region_, NULL, NULL, &status);
+	// printf("Demangled: %s\n", demangled_name);
+
+    // set region name to the demangled name without arguments if it was a mangled function
+    if(nullptr != demangled_name) {
+        free(region_);
+        region_ = demangled_name;
+        strtok(region_, "(");
+    }
+    // std::cout << "new region: " << region_ << "\n";
 }
 
 Region::~Region() {
@@ -120,6 +119,7 @@ void Region::on_region_exit() {
 }
 
 void Region::print_csv(FILE *csv_out) {
+  demangle_name();
   g_cachesim.print_csv(csv_out, region_, global_buckets_);
   size_t cs_num = 0;
   for (auto &cs : g_cachesims) {

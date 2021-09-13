@@ -20,7 +20,7 @@
 #define RD_VERBOSE 0
 
 // initialize / clear used structs
-void RD_init(const std::vector<int> &bucket_mins);
+void RD_init();
 
 // add distance buckets, starting from smallest (>0)
 // only specification of minimal distance required

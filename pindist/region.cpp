@@ -100,7 +100,6 @@ void Region::on_region_exit() {
     for (auto &buck : cs.buckets()) {
       buckets_[cs_num][b].aCount += buck.aCount - buckets_entry_[cs_num][b].aCount;
       buckets_[cs_num][b].aCount_excl += buck.aCount_excl - buckets_entry_[cs_num][b].aCount_excl;
-      buckets_[cs_num][b].min = buck.min;
       b++;
     }
     cs_num++;
@@ -110,7 +109,6 @@ void Region::on_region_exit() {
     for (auto &buck : cs.buckets()) {
       buckets_[cs_num][b].aCount += buck.aCount - buckets_entry_[cs_num][b].aCount;
       buckets_[cs_num][b].aCount_excl += buck.aCount_excl - buckets_entry_[cs_num][b].aCount_excl;
-      buckets_[cs_num][b].min = buck.min;
       b++;
     }
     cs_num++;

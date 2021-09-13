@@ -30,7 +30,7 @@ using std::vector;
 
 extern string g_application_name;
 extern vector<vector<int>> g_csindices_of_ds;
-extern std::vector<int> g_bucket_mins;
+extern std::vector<uint> g_bucket_mins;
 
 // make sure that memblocks are powers of two
 static constexpr bool is_pow2(int a) { return !(a & (a - 1)); }
@@ -249,10 +249,10 @@ void RD_print_csv() {
   fclose(csv_out);
 }
 
-void RD_init(const std::vector<int> &bucket_mins) {
+void RD_init() {
   g_addrMap.clear();
   g_datastructs.clear();
-  g_bucket_mins = bucket_mins;
+  // global cache
   g_cachesim = CacheSim{RD_NO_DATASTRUCT};
 }
 
@@ -302,7 +302,7 @@ int RD_get_hist(unsigned int b, unsigned int &min, unsigned long &accessCount) {
   // if (RD_DEBUG) RD_checkConsistency();
 
   assert((b >= 0) && (b < g_cachesim.buckets().size()));
-  min = g_cachesim.buckets()[b].min;
+  min = g_bucket_mins[b];
   accessCount = g_cachesim.buckets()[b].aCount;
   if (b == g_cachesim.buckets().size() - 1)
     return 0;

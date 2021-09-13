@@ -3,12 +3,14 @@
 #include "bucket.h"
 #include "memoryblock.h"
 #include <list>
+#include <unordered_map>
 #include <vector>
 
 class CacheSim {
 public:
   CacheSim();
   CacheSim(int ds_num);
+
   // ~CacheSim();
   const Marker on_block_new(MemoryBlock mb);
   int on_block_seen(const Marker &m);
@@ -21,12 +23,8 @@ public:
   inline void incr_access_inf() { incr_access(buckets_.size() - 1); }
   inline void incr_access_excl_inf() { incr_access_excl(buckets_.size() - 1); }
 
-  // inline void add_bucket(int min) { buckets_.push_back(Bucket(min)); }
-
   bool operator==(const CacheSim &other) const {
     return ds_num_ == other.ds_num_ && ds_nums_ == other.ds_nums_;
-    // return ds_num_ == other.ds_num_;
-    // return this == &other;
   }
 
   inline const std::list<MemoryBlock> &stack() const { return stack_; }
@@ -35,15 +33,13 @@ public:
   inline int ds_num() const { return ds_num_; }
 
   void print_csv(FILE *csv_out, const char *region);
-  void print_csv(FILE *csv_out, const char *region,
-                 std::vector<Bucket> &buckets);
-  void print_csv(FILE *csv_out, const char *region, Bucket *buckets,
-                 size_t num_buckets);
+  void print_csv(FILE *csv_out, const char *region, std::vector<Bucket> &buckets);
+  void print_csv(FILE *csv_out, const char *region, Bucket *buckets, size_t num_buckets);
 
 private:
   int next_bucket_;
-  int ds_num_; // element in g_cachesims
-  std::list<MemoryBlock> stack_;
+  int ds_num_;                   // element in g_cachesims
+  std::list<MemoryBlock> stack_; // Stack structure with MemoryBlock as element
   std::vector<Bucket> buckets_;
   std::vector<int> ds_nums_; // all datastructs that are included
 

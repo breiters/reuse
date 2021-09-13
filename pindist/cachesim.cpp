@@ -5,24 +5,20 @@
 #include <algorithm>
 #include <cassert>
 
+CacheSim g_cachesim;
 std::vector<CacheSim> g_cachesims;
 std::vector<CacheSim> g_cachesims_combined;
 
 CacheSim::CacheSim() {}
 
-CacheSim::CacheSim(int ds_num)
-    : next_bucket_{1}, ds_num_{ds_num}, buckets_{g_buckets} {
-  for (auto &b : buckets_) {
-    b.aCount = 0;
-    b.aCount_excl = 0;
-    // b.marker = stack_.end(); // TODO: can be removed
-    // printf("min: %u\n", b.min);
+CacheSim::CacheSim(int ds_num) : next_bucket_{1}, ds_num_{ds_num} {
+  for (int min : g_bucket_mins) {
+    buckets_.push_back(Bucket(min));
   }
 }
 
 void CacheSim::on_next_bucket_gets_active() {
-  // set new buckets marker to end of stack first then set marker to last stack
-  // element
+  // set new buckets marker to end of stack first then set marker to last stack element
   buckets_[next_bucket_].marker = stack_.end();
   --(buckets_[next_bucket_].marker);
 
@@ -46,18 +42,17 @@ void CacheSim::on_next_bucket_gets_active() {
  */
 const Marker CacheSim::on_block_new(MemoryBlock mb) {
   stack_.push_front(mb);
-//puts("11");
+
   // move markers upwards after inserting new block on stack
   move_markers(next_bucket_ - 1);
-//puts("22");
+
   // does another bucket get active?
-  bool last_bucket_reached = buckets_[next_bucket_].min == 0;
+  bool bucket_inf = buckets_[next_bucket_].min == BUCKET_INF_DIST;
   bool next_bucket_active = stack_.size() > buckets_[next_bucket_].min;
-//puts("33");
-  if (!last_bucket_reached && next_bucket_active) {
+
+  if (!bucket_inf && next_bucket_active) {
     on_next_bucket_gets_active();
   }
-//puts("44");
   return stack_.begin();
 }
 
@@ -93,9 +88,9 @@ void CacheSim::move_markers(int topBucket) {
     --buckets_[b].marker;
 
 #if DEBUG_LEVEL > 1
-// sanity check, but takes too long
+    // sanity check for bucket distance to stack begin, but takes too long
     unsigned int distance = 0;
-    for(auto it = stack_.begin(); it != buckets_[b].marker; it++) {
+    for (auto it = stack_.begin(); it != buckets_[b].marker; it++) {
       distance++;
     }
     // printf("distance: %d\n", distance);
@@ -126,8 +121,7 @@ void CacheSim::print_csv(FILE *csv_out, const char *region) {
   print_csv(csv_out, "main", buckets_);
 }
 
-void CacheSim::print_csv(FILE *csv_out, const char *region,
-                         std::vector<Bucket> &buckets) {
+void CacheSim::print_csv(FILE *csv_out, const char *region, std::vector<Bucket> &buckets) {
   // original code has min = 0 to define infinite distance
   // change to max limit to distinguish buckets zero from inf
   buckets.back().min = std::numeric_limits<decltype(buckets.back().min)>::max();
@@ -135,17 +129,16 @@ void CacheSim::print_csv(FILE *csv_out, const char *region,
   print_csv(csv_out, region, &buckets_[0], buckets_.size());
 }
 
-void CacheSim::print_csv(FILE *csv_out, const char *region, Bucket *buckets,
-                         size_t num_buckets) {
+void CacheSim::print_csv(FILE *csv_out, const char *region, Bucket *buckets, size_t num_buckets) {
   // single datastruct
   if (ds_nums_.size() == 0) {
     auto &ds = g_datastructs[ds_num_];
     for (size_t b = 0; b < num_buckets; b++) {
       const char *file_name = ds_num_ == RD_NO_DATASTRUCT ? "main" : ds.file_name.c_str();
 
-      fprintf(csv_out, CSV_FORMAT, region, ds_num_, ds.address, ds.nbytes,
-              ds.line, ds.access_count, file_name, buckets[b].min,
-              buckets[b].aCount, buckets[b].aCount, buckets[b].aCount_excl);
+      fprintf(csv_out, CSV_FORMAT, region, ds_num_, ds.address, ds.nbytes, ds.line, ds.access_count,
+              file_name, buckets[b].min, buckets[b].aCount, buckets[b].aCount,
+              buckets[b].aCount_excl);
     }
   }
   // combined datastruct
@@ -163,9 +156,8 @@ void CacheSim::print_csv(FILE *csv_out, const char *region, Bucket *buckets,
     str[offset - 2] = ']';
     str[offset - 1] = '\0';
     for (size_t b = 0; b < num_buckets; b++) {
-      fprintf(csv_out, CSV_FORMAT2, region, str, (void *)0x0, nbytes, 0, 0UL,
-              " ", buckets[b].min, buckets[b].aCount, buckets[b].aCount,
-              buckets[b].aCount_excl);
+      fprintf(csv_out, CSV_FORMAT2, region, str, (void *)0x0, nbytes, 0, 0UL, " ", buckets[b].min,
+              buckets[b].aCount, buckets[b].aCount, buckets[b].aCount_excl);
     }
   }
 }

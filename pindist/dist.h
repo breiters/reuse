@@ -20,10 +20,7 @@
 #define RD_VERBOSE 0
 
 // initialize / clear used structs
-void RD_init(int min1);
-
-// init global cachesim
-void RD_init_finish();
+void RD_init(const std::vector<int> &bucket_mins);
 
 // add distance buckets, starting from smallest (>0)
 // only specification of minimal distance required

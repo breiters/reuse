@@ -1,11 +1,11 @@
 #pragma once
 
 #include "memoryblock.h"
-#include <list>
-#include <string>
 #include <vector>
 
 #define BUCKET_INF_DIST 0
+
+extern std::vector<int> g_bucket_mins;
 
 class Bucket {
 public:
@@ -17,7 +17,5 @@ public:
   unsigned int min;
   Marker marker;
 
-  void add_sub(const Bucket &addend, const Bucket &minuend);
+  // void add_sub(const Bucket &addend, const Bucket &minuend);
 };
-
-extern std::vector<Bucket> g_buckets;

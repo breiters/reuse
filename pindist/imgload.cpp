@@ -1,7 +1,6 @@
 /**
- * 
+ *
  */
-
 
 #include "imgload.h"
 #include "bucket.h"
@@ -32,8 +31,7 @@ VOID *NewMalloc(FP_MALLOC orgFuncptr, UINT32 arg0, ADDRINT returnIp) {
   info.allocator = "malloc";
 
   PIN_LockClient();
-  LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col,
-                                         &info.line, &info.file_name);
+  LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col, &info.line, &info.file_name);
   PIN_UnlockClient();
 
   // TODO: case file_name length == 0 ?
@@ -46,8 +44,7 @@ VOID *NewMalloc(FP_MALLOC orgFuncptr, UINT32 arg0, ADDRINT returnIp) {
 }
 
 typedef void *(*fp_calloc)(size_t, size_t);
-VOID *NewCalloc(fp_calloc orgFuncptr, UINT64 arg0, UINT64 arg1,
-                ADDRINT returnIp) {
+VOID *NewCalloc(fp_calloc orgFuncptr, UINT64 arg0, UINT64 arg1, ADDRINT returnIp) {
   DatastructInfo info;
 
   // Call the relocated entry point of the original (replaced) routine.
@@ -58,8 +55,7 @@ VOID *NewCalloc(fp_calloc orgFuncptr, UINT64 arg0, UINT64 arg1,
   info.allocator = "calloc";
 
   PIN_LockClient();
-  LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col,
-                                         &info.line, &info.file_name);
+  LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col, &info.line, &info.file_name);
   PIN_UnlockClient();
 
   if (info.file_name.length() > 0) {
@@ -72,8 +68,7 @@ VOID *NewCalloc(fp_calloc orgFuncptr, UINT64 arg0, UINT64 arg1,
 // void *aligned_alloc(size_t alignment, size_t size);
 typedef void *(*fp_aligned_alloc)(size_t, size_t);
 
-VOID *NewAlignedAlloc(fp_aligned_alloc orgFuncptr, UINT64 arg0, UINT64 arg1,
-                      ADDRINT returnIp) {
+VOID *NewAlignedAlloc(fp_aligned_alloc orgFuncptr, UINT64 arg0, UINT64 arg1, ADDRINT returnIp) {
   DatastructInfo info;
 
   // Call the relocated entry point of the original (replaced) routine.
@@ -85,8 +80,7 @@ VOID *NewAlignedAlloc(fp_aligned_alloc orgFuncptr, UINT64 arg0, UINT64 arg1,
   info.allocator = "aligned_alloc";
 
   PIN_LockClient();
-  LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col,
-                                         &info.line, &info.file_name);
+  LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col, &info.line, &info.file_name);
   PIN_UnlockClient();
 
   if (info.file_name.length() > 0) {
@@ -99,8 +93,8 @@ VOID *NewAlignedAlloc(fp_aligned_alloc orgFuncptr, UINT64 arg0, UINT64 arg1,
 
 typedef int (*fp_posix_memalign)(void **, size_t, size_t);
 
-INT32 NewPosixMemalign(fp_posix_memalign orgFuncptr, VOID **memptr, UINT64 arg0,
-                       UINT64 arg1, ADDRINT returnIp) {
+INT32 NewPosixMemalign(fp_posix_memalign orgFuncptr, VOID **memptr, UINT64 arg0, UINT64 arg1,
+                       ADDRINT returnIp) {
   DatastructInfo info;
 
   // printf("arg0: %lu arg1: %lu *memptr: %p\n", arg0, arg1, *memptr);
@@ -115,8 +109,7 @@ INT32 NewPosixMemalign(fp_posix_memalign orgFuncptr, VOID **memptr, UINT64 arg0,
   info.allocator = "posix_memalign";
 
   PIN_LockClient();
-  LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col,
-                                         &info.line, &info.file_name);
+  LEVEL_PINCLIENT::PIN_GetSourceLocation(ADDRINT(returnIp), &info.col, &info.line, &info.file_name);
   PIN_UnlockClient();
 
   if (info.file_name.length() > 0) {
@@ -142,8 +135,7 @@ VOID PINDIST_start_region_(char *region) {
   }
 }
 
-VOID New_PINDIST_start_region(fp_pindist_start_stop orgFuncptr, char *region,
-                              ADDRINT returnIp) {
+VOID New_PINDIST_start_region(fp_pindist_start_stop orgFuncptr, char *region, ADDRINT returnIp) {
   PINDIST_start_region_(region);
 }
 
@@ -155,8 +147,7 @@ VOID PINDIST_stop_region_(char *region) {
   }
 }
 
-VOID New_PINDIST_stop_region(fp_pindist_start_stop orgFuncptr, char *region,
-                             ADDRINT returnIp) {
+VOID New_PINDIST_stop_region(fp_pindist_start_stop orgFuncptr, char *region, ADDRINT returnIp) {
   PINDIST_stop_region_(region);
 }
 
@@ -186,13 +177,10 @@ VOID ImageLoad(IMG img, VOID *v) {
         // do not insert call for functions that begin with __ or that contain @
         // or ...
         printf("function: %s\n", RTN_Name(rtn).c_str());
-        if ((RTN_Name(rtn).rfind('_', 0) == 0 &&
-             RTN_Name(rtn).rfind('Z', 1) != 1) // not mangled
+        if ((RTN_Name(rtn).rfind('_', 0) == 0 && RTN_Name(rtn).rfind('Z', 1) != 1) // not mangled
             || RTN_Name(rtn).rfind("omp_", 0) == 0 ||
-            RTN_Name(rtn).rfind("static_initialization_and_destruction") !=
-                std::string::npos ||
-            RTN_Name(rtn).rfind('.', 0) == 0 ||
-            RTN_Name(rtn).rfind('@') != std::string::npos ||
+            RTN_Name(rtn).rfind("static_initialization_and_destruction") != std::string::npos ||
+            RTN_Name(rtn).rfind('.', 0) == 0 || RTN_Name(rtn).rfind('@') != std::string::npos ||
             RTN_Name(rtn).compare("main") == 0 ||
             RTN_Name(rtn).compare("register_tm_clones") == 0 ||
             RTN_Name(rtn).compare("deregister_tm_clones") == 0 ||
@@ -213,10 +201,10 @@ VOID ImageLoad(IMG img, VOID *v) {
           continue;
         }
         printf("Instrumenting function: %s\n", RTN_Name(rtn).c_str());
-        RTN_InsertCall(rtn, IPOINT_BEFORE, (AFUNPTR)PINDIST_start_region_,
-                       IARG_PTR, RTN_Name(rtn).c_str(), IARG_END);
-        RTN_InsertCall(rtn, IPOINT_AFTER, (AFUNPTR)PINDIST_stop_region_,
-                       IARG_PTR, RTN_Name(rtn).c_str(), IARG_END);
+        RTN_InsertCall(rtn, IPOINT_BEFORE, (AFUNPTR)PINDIST_start_region_, IARG_PTR,
+                       RTN_Name(rtn).c_str(), IARG_END);
+        RTN_InsertCall(rtn, IPOINT_AFTER, (AFUNPTR)PINDIST_stop_region_, IARG_PTR,
+                       RTN_Name(rtn).c_str(), IARG_END);
         RTN_Close(rtn);
       }
     }
@@ -231,16 +219,15 @@ VOID ImageLoad(IMG img, VOID *v) {
     // Define a function prototype that describes the application routine
     // that will be replaced.
     //
-    PROTO proto_malloc = PROTO_Allocate(PIN_PARG(void *), CALLINGSTD_DEFAULT,
-                                        "malloc", PIN_PARG(size_t),
-                                        // PIN_PARG(int),
-                                        PIN_PARG_END());
+    PROTO proto_malloc =
+        PROTO_Allocate(PIN_PARG(void *), CALLINGSTD_DEFAULT, "malloc", PIN_PARG(size_t),
+                       // PIN_PARG(int),
+                       PIN_PARG_END());
     // Replace the application routine with the replacement function.
     // Additional arguments have been added to the replacement routine.
     //
-    RTN_ReplaceSignature(rtn, AFUNPTR(NewMalloc), IARG_PROTOTYPE, proto_malloc,
-                         IARG_ORIG_FUNCPTR, IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
-                         IARG_RETURN_IP, IARG_END);
+    RTN_ReplaceSignature(rtn, AFUNPTR(NewMalloc), IARG_PROTOTYPE, proto_malloc, IARG_ORIG_FUNCPTR,
+                         IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_RETURN_IP, IARG_END);
     // Free the function prototype.
     //
     PROTO_Free(proto_malloc);
@@ -251,14 +238,12 @@ VOID ImageLoad(IMG img, VOID *v) {
   if (RTN_Valid(rtn)) {
     std::cout << "Replacing calloc in " << IMG_Name(img) << std::endl;
 
-    PROTO proto_malloc =
-        PROTO_Allocate(PIN_PARG(void *), CALLINGSTD_DEFAULT, "calloc",
-                       PIN_PARG(size_t), PIN_PARG(size_t), PIN_PARG_END());
+    PROTO proto_malloc = PROTO_Allocate(PIN_PARG(void *), CALLINGSTD_DEFAULT, "calloc",
+                                        PIN_PARG(size_t), PIN_PARG(size_t), PIN_PARG_END());
 
-    RTN_ReplaceSignature(rtn, AFUNPTR(NewCalloc), IARG_PROTOTYPE, proto_malloc,
-                         IARG_ORIG_FUNCPTR, IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
-                         IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_RETURN_IP,
-                         IARG_END);
+    RTN_ReplaceSignature(rtn, AFUNPTR(NewCalloc), IARG_PROTOTYPE, proto_malloc, IARG_ORIG_FUNCPTR,
+                         IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+                         IARG_RETURN_IP, IARG_END);
 
     PROTO_Free(proto_malloc);
   }
@@ -268,15 +253,14 @@ VOID ImageLoad(IMG img, VOID *v) {
   if (RTN_Valid(rtn)) {
     std::cout << "Replacing posix_memalign in " << IMG_Name(img) << std::endl;
 
-    PROTO proto_malloc = PROTO_Allocate(
-        PIN_PARG(int), CALLINGSTD_DEFAULT, "posix_memalign", PIN_PARG(void **),
-        PIN_PARG(size_t), PIN_PARG(size_t), PIN_PARG_END());
+    PROTO proto_malloc =
+        PROTO_Allocate(PIN_PARG(int), CALLINGSTD_DEFAULT, "posix_memalign", PIN_PARG(void **),
+                       PIN_PARG(size_t), PIN_PARG(size_t), PIN_PARG_END());
 
-    RTN_ReplaceSignature(
-        rtn, AFUNPTR(NewPosixMemalign), IARG_PROTOTYPE, proto_malloc,
-        IARG_ORIG_FUNCPTR, IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
-        IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
-        IARG_RETURN_IP, IARG_END);
+    RTN_ReplaceSignature(rtn, AFUNPTR(NewPosixMemalign), IARG_PROTOTYPE, proto_malloc,
+                         IARG_ORIG_FUNCPTR, IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                         IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
+                         IARG_RETURN_IP, IARG_END);
 
     PROTO_Free(proto_malloc);
   }
@@ -285,14 +269,12 @@ VOID ImageLoad(IMG img, VOID *v) {
 
   if (RTN_Valid(rtn)) {
     std::cout << "Replacing aligned_alloc in " << IMG_Name(img) << std::endl;
-    PROTO proto_malloc =
-        PROTO_Allocate(PIN_PARG(void *), CALLINGSTD_DEFAULT, "aligned_alloc",
-                       PIN_PARG(size_t), PIN_PARG(size_t), PIN_PARG_END());
+    PROTO proto_malloc = PROTO_Allocate(PIN_PARG(void *), CALLINGSTD_DEFAULT, "aligned_alloc",
+                                        PIN_PARG(size_t), PIN_PARG(size_t), PIN_PARG_END());
 
-    RTN_ReplaceSignature(
-        rtn, AFUNPTR(NewAlignedAlloc), IARG_PROTOTYPE, proto_malloc,
-        IARG_ORIG_FUNCPTR, IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
-        IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_RETURN_IP, IARG_END);
+    RTN_ReplaceSignature(rtn, AFUNPTR(NewAlignedAlloc), IARG_PROTOTYPE, proto_malloc,
+                         IARG_ORIG_FUNCPTR, IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                         IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_RETURN_IP, IARG_END);
 
     PROTO_Free(proto_malloc);
   }
@@ -300,16 +282,13 @@ VOID ImageLoad(IMG img, VOID *v) {
   rtn = RTN_FindByName(img, "PINDIST_start_region");
 
   if (RTN_Valid(rtn)) {
-    std::cout << "Replacing PINDIST_start_region in " << IMG_Name(img)
-              << std::endl;
+    std::cout << "Replacing PINDIST_start_region in " << IMG_Name(img) << std::endl;
 
     PROTO proto_malloc = PROTO_Allocate(PIN_PARG(void *), CALLINGSTD_DEFAULT,
-                                        "PINDIST_start_region",
-                                        PIN_PARG(char *), PIN_PARG_END());
+                                        "PINDIST_start_region", PIN_PARG(char *), PIN_PARG_END());
 
-    RTN_ReplaceSignature(rtn, AFUNPTR(New_PINDIST_start_region), IARG_PROTOTYPE,
-                         proto_malloc, IARG_ORIG_FUNCPTR,
-                         IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_RETURN_IP,
+    RTN_ReplaceSignature(rtn, AFUNPTR(New_PINDIST_start_region), IARG_PROTOTYPE, proto_malloc,
+                         IARG_ORIG_FUNCPTR, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_RETURN_IP,
                          IARG_END);
 
     PROTO_Free(proto_malloc);
@@ -318,16 +297,13 @@ VOID ImageLoad(IMG img, VOID *v) {
   rtn = RTN_FindByName(img, "PINDIST_stop_region");
 
   if (RTN_Valid(rtn)) {
-    std::cout << "Replacing PINDIST_stop_region in " << IMG_Name(img)
-              << std::endl;
+    std::cout << "Replacing PINDIST_stop_region in " << IMG_Name(img) << std::endl;
 
-    PROTO proto_malloc =
-        PROTO_Allocate(PIN_PARG(void *), CALLINGSTD_DEFAULT,
-                       "PINDIST_stop_region", PIN_PARG(char *), PIN_PARG_END());
+    PROTO proto_malloc = PROTO_Allocate(PIN_PARG(void *), CALLINGSTD_DEFAULT, "PINDIST_stop_region",
+                                        PIN_PARG(char *), PIN_PARG_END());
 
-    RTN_ReplaceSignature(rtn, AFUNPTR(New_PINDIST_stop_region), IARG_PROTOTYPE,
-                         proto_malloc, IARG_ORIG_FUNCPTR,
-                         IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_RETURN_IP,
+    RTN_ReplaceSignature(rtn, AFUNPTR(New_PINDIST_stop_region), IARG_PROTOTYPE, proto_malloc,
+                         IARG_ORIG_FUNCPTR, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_RETURN_IP,
                          IARG_END);
 
     PROTO_Free(proto_malloc);

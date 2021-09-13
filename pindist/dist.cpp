@@ -8,7 +8,6 @@
 // #include <bits/charconv.h>
 #include <cassert>
 #include <cstdio>
-#include <iostream>
 #include <list>
 #include <unordered_map>
 #include <vector>
@@ -24,22 +23,14 @@
 
 #define DEBUG(x) printf(#x " : %d\n", x)
 
-using namespace std;
+using std::list;
+using std::string;
+using std::unordered_map;
+using std::vector;
 
-extern std::string g_application_name;
-
-// TODO: do not check more than one time if an address is in a CacheSim
-extern std::vector<std::vector<int>> ds_in_cs;
-
-//-------------------------------------------------------------------------
-// Stack structure with MemoryBlock as element
-typedef list<MemoryBlock>::iterator Marker;
-
-// list<MemoryBlock> g_stack;
-vector<Bucket> g_buckets;
-int g_nextBucket; // when stack is growing, we may enter this bucket
-CacheSim g_cachesim;
-#define RD_NO_DATASTRUCT -1
+extern string g_application_name;
+extern vector<vector<int>> g_csindices_of_ds;
+extern std::vector<int> g_bucket_mins;
 
 // make sure that memblocks are powers of two
 static constexpr bool is_pow2(int a) { return !(a & (a - 1)); }
@@ -69,6 +60,8 @@ template <> struct hash<S> {
 };
 } // namespace std
 
+// each memory block can be contained in multiple stacks
+// so we need to store the iterators to memory block in each stack
 struct MarkerContainer {
   MarkerContainer(Marker, Marker, std::vector<Marker>);
   MarkerContainer();
@@ -81,11 +74,12 @@ MarkerContainer::MarkerContainer() {}
 MarkerContainer::MarkerContainer(Marker g, Marker ds, std::vector<Marker> cds)
     : global_marker{g}, ds_marker{ds}, combine_markers{cds} {};
 
+// map with custom hash function:
 using addr_map = std::unordered_map<Addr, MarkerContainer, std::hash<S>>;
+// using addr_map = std::unordered_map<Addr, MarkerContainer>;
 addr_map g_addrMap;
 
 static void on_accessed_before() {
-  //puts(__func__);
   // for all caches where ds_num is included:
   // increment bucket 0 access count
   // and bucket 0 exclusive access count
@@ -101,15 +95,18 @@ static void on_accessed_before() {
     g_cachesims[ds_num].incr_access_excl(0);
 
     // combined datastructs
-    for (int csc : ds_in_cs[ds_num]) {
+    for (int csc : g_csindices_of_ds[ds_num]) {
       g_cachesims_combined[csc].incr_access(0);
       g_cachesims_combined[csc].incr_access_excl(0);
     }
   }
 }
 
+// new memory block
+// returns begin of stack
 static void on_block_new(Addr addr) {
-  //puts(__func__);
+  // memory block not seen yet
+  //
   // for all caches where ds_num is included:
   // increment bucket inf access count (done in CacheSim::on_block_new)
   // and bucket inf exclusive access count (done in CacheSim::on_block_new)
@@ -117,26 +114,13 @@ static void on_block_new(Addr addr) {
   // add block to stack and move markers and increment bucket of memory block
   // that move to next bucket
   //
-  //puts("1");
   int ds_num = datastruct_num(addr);
 
-#if USE_POINTERS
-  // PIN stdlib port does not support shared_ptr...
-  // ... so we use raw pointers here and don't care for best practices
-#endif
   MemoryBlock mb = MemoryBlock{addr, ds_num};
 
-  // Marker it;
-  // std::vector<Marker> stack_begins;
-
-  // new memory block
-  // returns begin of stack
   MarkerContainer mc{};
-  //puts("2");
   mc.global_marker = g_cachesim.on_block_new(mb);
-  //puts("3");
   g_cachesim.incr_access_inf();
-  //puts("4");
 
   if (ds_num != RD_NO_DATASTRUCT) {
     mc.ds_marker = g_cachesims[ds_num].on_block_new(mb);
@@ -144,7 +128,7 @@ static void on_block_new(Addr addr) {
     g_cachesims[ds_num].incr_access_excl_inf();
 
     // account for access to combined dastructs
-    for (int csc : ds_in_cs[ds_num]) {
+    for (int csc : g_csindices_of_ds[ds_num]) {
       assert(g_cachesims_combined[csc].contains(ds_num));
       mc.combine_markers.push_back(g_cachesims_combined[csc].on_block_new(mb));
       g_cachesims_combined[csc].incr_access_inf();
@@ -157,33 +141,16 @@ static void on_block_new(Addr addr) {
 
 #if USE_OLD_CODE
   if (RD_VERBOSE > 1)
-    fprintf(stderr, " NEW block %p, now %lu blocks seen\n", addr,
-            g_stack.size());
+    fprintf(stderr, " NEW block %p, now %lu blocks seen\n", addr, g_stack.size());
 
   if (RD_VERBOSE > 0)
-    fprintf(stderr, " ACTIVATE bucket %d (next bucket minimum depth %d)\n",
-            g_nextBucket, g_buckets[g_nextBucket + 1].min);
+    fprintf(stderr, " ACTIVATE bucket %d (next bucket minimum depth %d)\n", g_nextBucket,
+            g_buckets[g_nextBucket + 1].min);
 #endif
 }
-
-#if USE_OLD_CLODE
-bucket = blockIt->bucket;
-ds_num = blockIt->ds_num;
-
-// if not already on top of stack, move to top
-if (blockIt != g_stack.begin()) {
-  moveBlockToTop(addr, blockIt, bucket);
-} else {
-  blockIt->incACount();
-  if (RD_VERBOSE > 1)
-    fprintf(stderr, " TOP %p accessed, bucket %d, aCount %lu\n", addr, bucket,
-            blockIt->getACount());
-}
-#endif
 
 static void on_block_seen(addr_map::iterator it) {
-  //puts(__func__);
-  // memory block already seen
+  // memory block already seen - get iterators in stacks
   auto markers = it->second;
 
   int global_bucket = g_cachesim.on_block_seen(markers.global_marker);
@@ -197,7 +164,7 @@ static void on_block_seen(addr_map::iterator it) {
     g_cachesims[ds_num].incr_access_excl(bucket);
 
     int m = 0;
-    for (int csd : ds_in_cs[ds_num]) {
+    for (int csd : g_csindices_of_ds[ds_num]) {
       assert(g_cachesims_combined[csd].contains(ds_num));
       g_cachesims_combined[csd].on_block_seen(markers.combine_markers[m]);
       g_cachesims_combined[csd].incr_access(global_bucket);
@@ -216,7 +183,6 @@ void RD_accessBlock(Addr addr) {
     auto it = g_addrMap.find(addr);
 
     if (it == g_addrMap.end()) {
-      // memory block not seen yet
       on_block_new(addr);
     } else {
       on_block_seen(it);
@@ -236,197 +202,16 @@ void RD_accessBlock(Addr addr) {
   }
 }
 
-void RD_init_finish() {
-  g_cachesim = CacheSim{-1};
-}
-
-#if OLD_CLODE
-void moveMarkers(int topBucket) {
-  for (int b = 1; b <= topBucket; b++) {
-    --g_buckets.at(b).marker;
-    (g_buckets.at(b).marker)->bucket++;
-    if (RD_DEBUG)
-      assert((g_buckets[b].marker)->bucket == b);
-  }
-}
-
-void moveBlockToTop(Addr addr, Marker blockIt, int bucket) {
-  // move markers of active buckets within range 1 to <bucket>.
-  // we need to do this before moving blockIt to top, as
-  // there could be a marker on blockIt, which would go wrong
-  moveMarkers(bucket);
-
-  // move element pointed to by blockIt to beginning of list
-  g_stack.splice(g_stack.begin(), g_stack, blockIt);
-
-  blockIt->incACount();
-  blockIt->bucket = 0;
-
-  if (RD_VERBOSE > 1)
-    fprintf(stderr, " MOVED %p from bucket %d to top (aCount %lu)\n", addr,
-            bucket, blockIt->getACount());
-}
-
-// run stack simulation
-// To use a specific block size, ensure that <a> is aligned
-void RD_accessBlock(Addr addr) {
-  [[maybe_unused]] static Addr addr_last;
-
-  int bucket; // bucket of current access
-  int ds_bucket = 0;
-  int ds_num;
-
-  vector<int> ds_buckets_combined;
-
-  // bool accessed_before = (addr == addr_last);
-  // was memory block accessed before? --> don't need to search in hash map!
-  // memory block is on top of stack
-  // if (addr == addr_last) {
-  if (0) { // TODO
-    // increase bucket 0 and ds_bucket 0
-    ds_num = g_stack.begin()->ds_num;
-    bucket = 0;
-    ds_bucket = 0;
-
-    // sanity check if address of memory block on top of stack is same as a:
-    assert(g_stack.begin()->a == addr);
-    if (ds_num != RD_NO_DATASTRUCT) {
-      assert(g_cachesims[ds_num].stack().begin()->a == addr);
-    }
-  } else {
-    auto it = g_addrMap.find(addr);
-
-    if (it == g_addrMap.end()) {
-      // memory block not seen yet
-      ds_num = handleNewBlock(addr);
-      bucket = g_buckets.size() - 1; // "infinite" distance, put in last bucket
-      ds_bucket = g_buckets.size() - 1;
-
-    } else {
-      // memory block already seen
-      auto markers = it->second;
-      auto blockIt = markers.global_marker;
-
-      bucket = blockIt->bucket;
-      ds_num = blockIt->ds_num;
-
-      // if not already on top of stack, move to top
-      if (blockIt != g_stack.begin()) {
-        moveBlockToTop(addr, blockIt, bucket);
-      } else {
-        blockIt->incACount();
-        if (RD_VERBOSE > 1)
-          fprintf(stderr, " TOP %p accessed, bucket %d, aCount %lu\n", addr,
-                  bucket, blockIt->getACount());
-      }
-
-      if (ds_num != RD_NO_DATASTRUCT) {
-        ds_bucket = (markers.ds_marker)->bucket;
-
-        g_cachesims[ds_num].on_block_seen(markers.ds_marker);
-
-        // DEBUG(ds_num);
-        int m = 0;
-        for (int i : ds_in_cs[ds_num]) {
-          assert(g_cachesims_combined[i].contains(ds_num));
-          // DEBUG(i);
-          ds_buckets_combined.push_back((markers.combine_markers[m])->bucket);
-          g_cachesims_combined[i].on_block_seen(markers.combine_markers[m]);
-          m++;
-        }
-// DEBUG(ds_num);
-// int cs_num = 0;
-#if 0
-        int i = 0;
-        for (auto &cs : g_cachesims_combined) {
-          if (cs.contains(ds_num)) {
-            DEBUG(i);
-            assert(g_cachesims_combined[i].contains(ds_num));
-            // buckets_combined.push_back(std::make_pair(
-            // (*markers.combine_markers[i])->ds_bucket, cs_num));
-            // DEBUG(i);
-            ds_buckets_combined.push_back((markers.combine_markers[i])->bucket);
-            cs.on_block_seen(markers.combine_markers[i]);
-            i++;
-          }
-          // cs_num++;
-        }
-#endif
-        /*
-         */
-        // exit(0);
-      }
-    }
-  }
-
-  // store last accessed address
-  addr_last = addr;
-
-  // global access count on bucket
-  g_buckets[bucket].aCount++;
-
-  assert(bucket <= (int)g_buckets.size() - 1);
-
-  // access count to datastructure
-  if (ds_num != RD_NO_DATASTRUCT) {
-    g_datastructs[ds_num].access_count++;
-    assert(ds_bucket > -1);
-    assert(ds_bucket <= (int)g_buckets.size() - 1);
-
-    g_cachesims[ds_num].buckets()[bucket].aCount++;
-    g_cachesims[ds_num].buckets()[ds_bucket].aCount_excl++;
-
-    // TODO: CAREFULL IF VECTOR IS EMPTY WHEN A == A_LAST!!!
-
-    if (ds_buckets_combined.size() == 0) {
-      for (auto &cs : g_cachesims_combined) {
-        if (cs.contains(ds_num)) {
-          // case: infinite distance
-          cs.buckets()[g_buckets.size() - 1].aCount++;
-          cs.buckets()[g_buckets.size() - 1].aCount_excl++;
-        }
-      }
-    } else {
-
-      int i = 0;
-      for (auto &cs : g_cachesims_combined) {
-        if (cs.contains(ds_num)) {
-          assert(ds_buckets_combined[i] > -1);
-          assert(ds_buckets_combined[i] < (int)g_buckets.size() - 1);
-          cs.buckets()[bucket].aCount++;
-          cs.buckets()[ds_buckets_combined[i]].aCount_excl++;
-          i++;
-        }
-      }
-    }
-  }
-
-  if (RD_DEBUG) {
-    // run consistency check every 10 million invocations
-    static int checkCount = 0;
-    checkCount++;
-    if (checkCount > 10000000) {
-      RD_checkConsistency();
-      checkCount = 0;
-    }
-  }
-}
-
-#endif
-
 #define CSV_FORMAT "%s,%d,%p,%zu,%d,%lu,%s,%u,%lu,%lu,%lu\n"
 
 void RD_print_csv() {
-  const char *csv_header =
-      "region,datastruct,addr,nbytes,line,ds_total_access_count,file_name,"
-      "min,"
-      "access_count,datastruct_access_count,datastruct_access_exclusive\n";
+  const char *csv_header = "region,datastruct,addr,nbytes,line,ds_total_access_count,file_name,min,"
+                           "access_count,datastruct_access_count,datastruct_access_exclusive\n";
 
   // generate filename
   constexpr size_t FILENAME_SIZE = 256;
   char csv_filename[FILENAME_SIZE];
-  snprintf(csv_filename, FILENAME_SIZE, "pindist.%s.csv",
-           g_application_name.c_str());
+  snprintf(csv_filename, FILENAME_SIZE, "pindist.%s.csv", g_application_name.c_str());
 
   FILE *csv_out = fopen(csv_filename, "w");
   fprintf(csv_out, "%s", csv_header);
@@ -456,7 +241,7 @@ void RD_print_csv() {
     region.second->print_csv(csv_out);
   }
 
-  // cleanup : should be done elsewhere
+  /** TODO: cleanup should be done elsewhere **/
   for (auto &region : g_regions) {
     delete region.second;
   }
@@ -464,16 +249,25 @@ void RD_print_csv() {
   fclose(csv_out);
 }
 
+void RD_init(const std::vector<int> &bucket_mins) {
+  g_addrMap.clear();
+  g_datastructs.clear();
+  g_bucket_mins = bucket_mins;
+  g_cachesim = CacheSim{RD_NO_DATASTRUCT};
+}
+
+#if USE_OLD_CODE
+
 void RD_init(int min1) {
   g_addrMap.clear();
   g_datastructs.clear();
   // addrMap.rehash(4000000);
 
   g_buckets.clear();
-  g_buckets.push_back(Bucket(0));    // bucket starting with distance 0
-  g_buckets.push_back(Bucket(min1)); // first real bucket of interest
+  g_buckets.push_back(Bucket(0));               // bucket starting with distance 0
+  g_buckets.push_back(Bucket(min1));            // first real bucket of interest
   g_buckets.push_back(Bucket(BUCKET_INF_DIST)); // for "infinite" distance
-  g_nextBucket = 1;
+  // g_nextBucket = 1;
 }
 
 // add distance buckets, starting from smallest (>0)
@@ -486,6 +280,7 @@ void RD_addBucket(unsigned int min) {
 
   g_buckets.insert(g_buckets.end() - 1, Bucket(min));
 }
+#endif
 
 // get statistics
 void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
@@ -493,7 +288,7 @@ void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
     RD_checkConsistency();
 
   unsigned long aCount = 0;
-  for (const Bucket &b : g_buckets)
+  for (const Bucket &b : g_cachesim.buckets())
     aCount += b.aCount;
 
   stack_size = g_addrMap.size();
@@ -506,10 +301,10 @@ void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
 int RD_get_hist(unsigned int b, unsigned int &min, unsigned long &accessCount) {
   // if (RD_DEBUG) RD_checkConsistency();
 
-  assert((b >= 0) && (b < g_buckets.size()));
-  min = g_buckets[b].min;
-  accessCount = g_buckets[b].aCount;
-  if (b == g_buckets.size() - 1)
+  assert((b >= 0) && (b < g_cachesim.buckets().size()));
+  min = g_cachesim.buckets()[b].min;
+  accessCount = g_cachesim.buckets()[b].aCount;
+  if (b == g_cachesim.buckets().size() - 1)
     return 0;
   return b + 1;
 }
@@ -578,8 +373,7 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
     maxNonEmptyBucket++;
 
   bNext = RD_get_hist(0, min, aCount);
-  fprintf(out, "%s[%8.3f MB ..] %s ==>\n", pStr,
-          (double)(min * blockSize) / 1000000.0, formatLong(aCount, aCount));
+  fprintf(out, "%s[%8.3f MB ..] %s ==>\n", pStr, (double)(min * blockSize) / 1000000.0, formatLong(aCount, aCount));
   b = bNext;
   do {
     bNext = RD_get_hist(b, min, aCount);
@@ -593,8 +387,7 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
     else
       sprintf(bStr, "   inf/cold   ");
 
-    fprintf(out, "%s[%s] %s %s\n", pStr, bStr, formatLong(aCount, maxCount),
-            formatBar(aCount, maxCount, 60));
+    fprintf(out, "%s[%s] %s %s\n", pStr, bStr, formatLong(aCount, maxCount), formatBar(aCount, maxCount, 60));
     b = bNext;
   } while (b != 0);
 
@@ -606,8 +399,7 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
           "%sStatistics:\n"
           "%s  memory blocks accessed: %lu (%3.3f MB)\n"
           "%s  number of accesses:     %lu\n",
-          pStr, pStr, stack_size, ((double)stack_size * blockSize) / 1000000.0,
-          pStr, aCount);
+          pStr, pStr, stack_size, ((double)stack_size * blockSize) / 1000000.0, pStr, aCount);
 }
 
 #define FUTURE_IMPROVED_HASH 0
@@ -625,8 +417,7 @@ struct _Mod_myrange_hashing {
   _Mod_myrange_hashing() {}
   _Mod_myrange_hashing(const __detail::_Mod_range_hashing &temp) {}
 
-  result_type operator()(first_argument_type __num,
-                         second_argument_type __den) const noexcept {
+  result_type operator()(first_argument_type __num, second_argument_type __den) const noexcept {
     if (mask < __den) {
       std::size_t n = __den - 1;
       n |= n >> 1;
@@ -648,21 +439,16 @@ struct _Mod_myrange_hashing {
 std::size_t _Mod_myrange_hashing::mask = 1;
 
 namespace std {
-template <typename _Alloc, typename _ExtractKey, typename _Equal, typename _H1,
-          typename _Hash, typename _RehashPolicy, typename _Traits>
+template <typename _Alloc, typename _ExtractKey, typename _Equal, typename _H1, typename _Hash, typename _RehashPolicy,
+          typename _Traits>
 
-class _Hashtable<Addr, std::pair<const Addr, list<MemoryBlock>::iterator>,
-                 _Alloc, _ExtractKey, _Equal, _H1, __detail::_Mod_range_hashing,
-                 _Hash, _RehashPolicy, _Traits>
-    : public _Hashtable<Addr,
-                        std::pair<const Addr, list<MemoryBlock>::iterator>,
-                        _Alloc, _ExtractKey, _Equal, _H1, _Mod_myrange_hashing,
-                        _Hash, _RehashPolicy, _Traits> {
+class _Hashtable<Addr, std::pair<const Addr, list<MemoryBlock>::iterator>, _Alloc, _ExtractKey, _Equal, _H1,
+                 __detail::_Mod_range_hashing, _Hash, _RehashPolicy, _Traits>
+    : public _Hashtable<Addr, std::pair<const Addr, list<MemoryBlock>::iterator>, _Alloc, _ExtractKey, _Equal, _H1,
+                        _Mod_myrange_hashing, _Hash, _RehashPolicy, _Traits> {
 public:
-  using myBase =
-      _Hashtable<Addr, std::pair<const Addr, list<MemoryBlock>::iterator>,
-                 _Alloc, _ExtractKey, _Equal, _H1, _Mod_myrange_hashing, _Hash,
-                 _RehashPolicy, _Traits>;
+  using myBase = _Hashtable<Addr, std::pair<const Addr, list<MemoryBlock>::iterator>, _Alloc, _ExtractKey, _Equal, _H1,
+                            _Mod_myrange_hashing, _Hash, _RehashPolicy, _Traits>;
 
   using myBase::_Hashtable;
   using mySizeType = typename myBase::size_type;

@@ -7,11 +7,10 @@
 #include <cassert>
 #include <vector>
 
-std::vector<std::vector<int>> ds_in_cs;
+std::vector<std::vector<int>> g_csindices_of_ds;
 std::vector<DatastructInfo> g_datastructs;
-// extern std::vector<Bucket> g_buckets;
 
-// combine 1 level
+/** combine 1 level (pairs) TODO: combine N levels **/
 [[maybe_unused]] static void combine(int ds_num, [[maybe_unused]] int level) {
   static bool first = true;
   if (first) {
@@ -21,44 +20,41 @@ std::vector<DatastructInfo> g_datastructs;
 
   int ds1 = 0;
   for ([[maybe_unused]] auto &ds : g_datastructs) {
-    printf("combining: %d, %d in csnum: %d\n", ds1, ds_num, (int)g_cachesims_combined.size());
-    ds_in_cs[ds_num].push_back((int)g_cachesims_combined.size());
-    ds_in_cs[ds1].push_back((int)g_cachesims_combined.size());
-    g_cachesims_combined.push_back(
-      // CacheSim{static_cast<int>(g_cachesims_combined.size())}); // ???
-        CacheSim{static_cast<int>(g_cachesims_combined.size() - 1)});
+    // printf("combining: %d, %d in csnum: %d\n", ds1, ds_num, (int)g_cachesims_combined.size());
+    int cs_num = static_cast<int>(g_cachesims_combined.size() - 1);
 
-    // g_cachesims_combined.back().add_datastruct(ds1);
-    // g_cachesims_combined.back().add_datastruct(ds_num);
+    g_csindices_of_ds[ds_num].push_back(cs_num + 1);
+    g_csindices_of_ds[ds1].push_back(cs_num + 1);
 
-    g_cachesims_combined[g_cachesims_combined.size() - 1].add_datastruct(ds1);
-    g_cachesims_combined[g_cachesims_combined.size() - 1].add_datastruct(ds_num);
+    g_cachesims_combined.push_back(CacheSim{cs_num});
+    g_cachesims_combined.back().add_datastruct(ds1);
+    g_cachesims_combined.back().add_datastruct(ds_num);
     ds1++;
   }
-
 }
 
 void register_datastruct(DatastructInfo &info) {
-  ds_in_cs.push_back(std::vector<int>{});
-  combine(static_cast<int>(g_datastructs.size()), 1);
-  g_datastructs.push_back(info);
-  g_cachesims.push_back(CacheSim{static_cast<int>(g_datastructs.size()) - 1});
+  g_csindices_of_ds.push_back(std::vector<int>{});
+  int num_datastructs = static_cast<int>(g_datastructs.size());
+  combine(num_datastructs, 1);
 
+  g_datastructs.push_back(info);
+  g_cachesims.push_back(CacheSim{num_datastructs - 1});
 
 #if DEBUG_LEVEL > 0
   int ds_num = 0;
-  for(auto ds : ds_in_cs) {
+  for (auto ds : ds_in_cs) {
     printf("ds %d in: \n", ds_num);
-    for(int cs : ds) {
+    for (int cs : ds) {
       printf(" %d ", cs);
     }
     printf("\n");
     ds_num++;
   }
-#endif /* DEBUG */
+#endif /* DEBUG_LEVEL */
 }
 
-// TODO: use better algorithm to get datastruct
+/** TODO: maybe use better algorithm to get datastruct **/
 int datastruct_num(Addr addr) {
   int i = 0;
   for (auto &ds : g_datastructs) {
@@ -70,11 +66,3 @@ int datastruct_num(Addr addr) {
   }
   return RD_NO_DATASTRUCT;
 }
-
-/*
-std::vector<int> datstruct_nums(Addr addr) {
-  std::vector<int> v;
-  v.push_back(datstruct_num(addr));
-  return v; // TODO!
-}
-*/

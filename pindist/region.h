@@ -4,17 +4,17 @@
 #include <unordered_map>
 #include <vector>
 
-#include "cachesim.h"
 #include "bucket.h"
+#include "cachesim.h"
 
 class Region {
 public:
   char *region_;
   std::vector<Bucket> global_buckets_;
-  std::vector<Bucket> global_buckets_on_entry_;
+  std::vector<Bucket> global_buckets_entry_;
 
-  std::vector<Bucket *> region_buckets_;
-  std::vector<Bucket *> region_buckets_on_entry_;
+  std::vector<Bucket *> buckets_;
+  std::vector<Bucket *> buckets_entry_;
   // std::unordered_map<CacheSim, std::vector<Bucket>> region_buckets_;
   // std::unordered_map<CacheSim, std::vector<Bucket>> region_buckets_on_entry_;
 

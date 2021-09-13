@@ -31,8 +31,10 @@ public:
 
 private:
 };
-typedef void* Addr;
+
+typedef void *Addr;
 extern void register_datastruct(DatastructInfo &info);
 extern int datastruct_num(Addr addr);
 extern std::vector<int> datstruct_nums(Addr addr);
 extern std::vector<DatastructInfo> g_datastructs;
+extern std::vector<std::vector<int>> g_csindices_of_ds;

@@ -14,68 +14,71 @@ std::unordered_map<char *, Region *> g_regions;
 Region::Region(char *region) : region_{strdup(region)} {
   // add region buckets for every CacheSim
   // init with zero
-  region_buckets_.reserve(g_cachesims.size() + g_cachesims_combined.size());
-  region_buckets_on_entry_.reserve(g_cachesims.size() +
-                                   g_cachesims_combined.size());
+  global_buckets_ = g_cachesim.buckets();
+  for (auto &b : global_buckets_) {
+    b.aCount = 0;
+    b.aCount_excl = 0;
+  }
+
+  buckets_.reserve(g_cachesims.size() + g_cachesims_combined.size());
+  buckets_entry_.reserve(g_cachesims.size() + g_cachesims_combined.size());
 
   for (auto &cs : g_cachesims) {
-    region_buckets_.push_back(new Bucket[cs.buckets().size()]()); // zero
+    buckets_.push_back(new Bucket[cs.buckets().size()]()); // zero
   }
   for (auto &cs : g_cachesims_combined) {
-    region_buckets_.push_back(new Bucket[cs.buckets().size()]()); // zero
+    buckets_.push_back(new Bucket[cs.buckets().size()]()); // zero
   }
 }
 
 void Region::demangle_name() {
-	int status = -1;
-	char *demangled_name = abi::__cxa_demangle(region_, NULL, NULL, &status);
-	// printf("Demangled: %s\n", demangled_name);
+  int status = -1;
+  char *demangled_name = abi::__cxa_demangle(region_, NULL, NULL, &status);
+  // printf("Demangled: %s\n", demangled_name);
 
-    // set region name to the demangled name without arguments if it was a mangled function
-    if(nullptr != demangled_name) {
-        free(region_);
-        region_ = demangled_name;
-        strtok(region_, "(");
-    }
-    // std::cout << "new region: " << region_ << "\n";
+  // set region name to the demangled name without arguments if it was a mangled function
+  if (nullptr != demangled_name) {
+    free(region_);
+    region_ = demangled_name;
+    strtok(region_, "(");
+  }
+  // std::cout << "new region: " << region_ << "\n";
 }
 
 Region::~Region() {
   // std::cout << "free region: " << region_ << "\n";
   free(region_);
   region_ = nullptr;
-  for (auto rb : region_buckets_) {
+  for (auto rb : buckets_) {
     delete[] rb;
   }
-  for (auto rb : region_buckets_on_entry_) {
+  for (auto rb : buckets_entry_) {
     delete[] rb;
   }
 }
 
 void Region::on_region_entry() {
-  std::cout << "entry region: " << region_ << "\n";
+  // std::cout << "entry region: " << region_ << "\n";
   // make snapshot of current buckets access counts
-  global_buckets_ = g_cachesim.buckets();
+  global_buckets_entry_ = g_cachesim.buckets();
 
   size_t cs_num = 0;
   for (auto &cs : g_cachesims) {
-    region_buckets_on_entry_.push_back(
-        new Bucket[cs.buckets().size()]()); // zero
+    buckets_entry_.push_back(new Bucket[cs.buckets().size()]()); // zero
     size_t b = 0;
     for (auto &buck : cs.buckets()) {
-      region_buckets_on_entry_[cs_num][b].aCount = buck.aCount;
-      region_buckets_on_entry_[cs_num][b].aCount_excl = buck.aCount_excl;
+      buckets_entry_[cs_num][b].aCount = buck.aCount;
+      buckets_entry_[cs_num][b].aCount_excl = buck.aCount_excl;
       b++;
     }
     cs_num++;
   }
   for (auto &cs : g_cachesims_combined) {
-    region_buckets_on_entry_.push_back(
-        new Bucket[cs.buckets().size()]()); // zero
+    buckets_entry_.push_back(new Bucket[cs.buckets().size()]()); // zero
     size_t b = 0;
     for (auto &buck : cs.buckets()) {
-      region_buckets_on_entry_[cs_num][b].aCount = buck.aCount;
-      region_buckets_on_entry_[cs_num][b].aCount_excl = buck.aCount_excl;
+      buckets_entry_[cs_num][b].aCount = buck.aCount;
+      buckets_entry_[cs_num][b].aCount_excl = buck.aCount_excl;
       b++;
     }
     cs_num++;
@@ -83,23 +86,21 @@ void Region::on_region_entry() {
 }
 
 void Region::on_region_exit() {
-  std::cout << "exit region: " << region_ << "\n";
+  // std::cout << "exit region: " << region_ << "\n";
   size_t cs_num = 0;
 
   size_t b = 0;
-  for(auto buck : global_buckets_) {
-    buck.aCount += g_cachesim.buckets()[b].aCount - global_buckets_on_entry_[b].aCount;
+  for (auto buck : global_buckets_) {
+    buck.aCount += g_cachesim.buckets()[b].aCount - global_buckets_entry_[b].aCount;
     b++;
   }
 
   for (auto &cs : g_cachesims) {
     size_t b = 0;
     for (auto &buck : cs.buckets()) {
-      region_buckets_[cs_num][b].aCount +=
-          buck.aCount - region_buckets_on_entry_[cs_num][b].aCount;
-      region_buckets_[cs_num][b].aCount_excl +=
-          buck.aCount_excl - region_buckets_on_entry_[cs_num][b].aCount_excl;
-      region_buckets_[cs_num][b].min = buck.min;
+      buckets_[cs_num][b].aCount += buck.aCount - buckets_entry_[cs_num][b].aCount;
+      buckets_[cs_num][b].aCount_excl += buck.aCount_excl - buckets_entry_[cs_num][b].aCount_excl;
+      buckets_[cs_num][b].min = buck.min;
       b++;
     }
     cs_num++;
@@ -107,11 +108,9 @@ void Region::on_region_exit() {
   for (auto &cs : g_cachesims_combined) {
     size_t b = 0;
     for (auto &buck : cs.buckets()) {
-      region_buckets_[cs_num][b].aCount +=
-          buck.aCount - region_buckets_on_entry_[cs_num][b].aCount;
-      region_buckets_[cs_num][b].aCount_excl +=
-          buck.aCount_excl - region_buckets_on_entry_[cs_num][b].aCount_excl;
-      region_buckets_[cs_num][b].min = buck.min;
+      buckets_[cs_num][b].aCount += buck.aCount - buckets_entry_[cs_num][b].aCount;
+      buckets_[cs_num][b].aCount_excl += buck.aCount_excl - buckets_entry_[cs_num][b].aCount_excl;
+      buckets_[cs_num][b].min = buck.min;
       b++;
     }
     cs_num++;
@@ -123,13 +122,11 @@ void Region::print_csv(FILE *csv_out) {
   g_cachesim.print_csv(csv_out, region_, global_buckets_);
   size_t cs_num = 0;
   for (auto &cs : g_cachesims) {
-    cs.print_csv(csv_out, region_, region_buckets_[cs_num],
-                 cs.buckets().size());
+    cs.print_csv(csv_out, region_, buckets_[cs_num], cs.buckets().size());
     cs_num++;
   }
   for (auto &cs : g_cachesims_combined) {
-    cs.print_csv(csv_out, region_, region_buckets_[cs_num],
-                 cs.buckets().size());
+    cs.print_csv(csv_out, region_, buckets_[cs_num], cs.buckets().size());
     cs_num++;
   }
 }

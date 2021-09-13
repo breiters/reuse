@@ -22,7 +22,6 @@ public:
 
   int bucket;    // current bucket
   int ds_num;    // datastructure it belongs to
-
   Addr a;
 };
 #else

@@ -35,15 +35,17 @@ std::vector<DatastructInfo> g_datastructs;
 
 void register_datastruct(DatastructInfo &info) {
   g_csindices_of_ds.push_back(std::vector<int>{});
+  
   int num_datastructs = static_cast<int>(g_datastructs.size());
-  combine(num_datastructs, 1);
+  g_cachesims.push_back(CacheSim{num_datastructs});
 
+  combine(num_datastructs, 1);
+  
   g_datastructs.push_back(info);
-  g_cachesims.push_back(CacheSim{num_datastructs - 1});
 
 #if DEBUG_LEVEL > 0
   int ds_num = 0;
-  for (auto ds : ds_in_cs) {
+  for (auto ds : g_csindices_of_ds) {
     printf("ds %d in: \n", ds_num);
     for (int cs : ds) {
       printf(" %d ", cs);

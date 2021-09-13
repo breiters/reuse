@@ -13,7 +13,7 @@ public:
 
   // ~CacheSim();
   const Marker on_block_new(MemoryBlock mb);
-  int on_block_seen(const Marker &m);
+  int on_block_seen(/*const*/ Marker &m);
   void add_datastruct(int ds_num);
   bool contains(int ds_num) const;
 

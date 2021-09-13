@@ -29,8 +29,7 @@ using std::unordered_map;
 using std::vector;
 
 extern string g_application_name;
-extern vector<vector<int>> g_csindices_of_ds;
-extern std::vector<uint> g_bucket_mins;
+// extern vector<vector<int>> g_csindices_of_ds;
 
 // make sure that memblocks are powers of two
 static constexpr bool is_pow2(int a) { return !(a & (a - 1)); }
@@ -159,16 +158,16 @@ static void on_block_seen(addr_map::iterator it) {
   int ds_num = markers.global_marker->ds_num;
 
   if (ds_num != RD_NO_DATASTRUCT) {
-    int bucket = g_cachesims[ds_num].on_block_seen(markers.ds_marker);
+    int ds_bucket = g_cachesims[ds_num].on_block_seen(markers.ds_marker);
     g_cachesims[ds_num].incr_access(global_bucket);
-    g_cachesims[ds_num].incr_access_excl(bucket);
+    g_cachesims[ds_num].incr_access_excl(ds_bucket);
 
     int m = 0;
     for (int csd : g_csindices_of_ds[ds_num]) {
       assert(g_cachesims_combined[csd].contains(ds_num));
-      g_cachesims_combined[csd].on_block_seen(markers.combine_markers[m]);
+      int csc_bucket = g_cachesims_combined[csd].on_block_seen(markers.combine_markers[m]);
       g_cachesims_combined[csd].incr_access(global_bucket);
-      g_cachesims_combined[csd].incr_access_excl(bucket);
+      g_cachesims_combined[csd].incr_access_excl(csc_bucket);
       m++;
     }
   }
@@ -202,11 +201,9 @@ void RD_accessBlock(Addr addr) {
   }
 }
 
-#define CSV_FORMAT "%s,%d,%p,%zu,%d,%lu,%s,%u,%lu,%lu,%lu\n"
-
 void RD_print_csv() {
   const char *csv_header = "region,datastruct,addr,nbytes,line,ds_total_access_count,file_name,min,"
-                           "access_count,datastruct_access_count,datastruct_access_exclusive\n";
+                           "access_count,access_exclusive\n";
 
   // generate filename
   constexpr size_t FILENAME_SIZE = 256;
@@ -216,25 +213,14 @@ void RD_print_csv() {
   FILE *csv_out = fopen(csv_filename, "w");
   fprintf(csv_out, "%s", csv_header);
 
-#if 0
-  g_buckets.back().min =
-      std::numeric_limits<decltype(g_buckets.back().min)>::max();
-  for (auto &b : g_buckets) {
-    fprintf(csv_out, CSV_FORMAT, "main", -1, (void *)0x0, (size_t)0, 0, 0UL,
-            "main", b.min, b.aCount, 0UL, 0UL);
-  }
-#endif
-
-  const char *region = "main";
-
-  g_cachesim.print_csv(csv_out, region);
+  g_cachesim.print_csv(csv_out, "main");
 
   for (auto &cs : g_cachesims) {
-    cs.print_csv(csv_out, region);
+    cs.print_csv(csv_out, "main");
   }
 
   for (auto &cs : g_cachesims_combined) {
-    cs.print_csv(csv_out, region);
+    cs.print_csv(csv_out, "main");
   }
 
   for (const auto &region : g_regions) {
@@ -302,7 +288,7 @@ int RD_get_hist(unsigned int b, unsigned int &min, unsigned long &accessCount) {
   // if (RD_DEBUG) RD_checkConsistency();
 
   assert((b >= 0) && (b < g_cachesim.buckets().size()));
-  min = g_bucket_mins[b];
+  min = Bucket::mins[b];
   accessCount = g_cachesim.buckets()[b].aCount;
   if (b == g_cachesim.buckets().size() - 1)
     return 0;

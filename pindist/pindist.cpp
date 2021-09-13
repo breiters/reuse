@@ -167,6 +167,9 @@ VOID Exit(INT32 code, VOID *v) {
 
   fprintf(out, "%s  ignored accesses by thread != 0: %lu reads, %lu writes\n", pStr, ignoredReads, ignoredWrites);
 
+  // original code has min = 0 to define infinite distance
+  // change to max limit to distinguish buckets zero dist from buckets inf dist
+  Bucket::mins.back() = std::numeric_limits<unsigned>::max();
   RD_print_csv();
 }
 
@@ -182,8 +185,6 @@ INT32 Usage() {
 int main(int argc, char *argv[]) {
   if (PIN_Init(argc, argv))
     return Usage();
-
-  // std::vector<int> bucket_mins;
 
 #if USE_OLD_CODE
   // add buckets [0-1023], [1K - 2K-1], ... [1G - ]
@@ -207,16 +208,16 @@ int main(int argc, char *argv[]) {
 
   int L1d_capacity_per_way = 64 * KiB / 4;
   int L2_capacity_per_way = 8 * MiB / 16;
+  
+  Bucket::mins.push_back(0);
 
-  g_bucket_mins.push_back(0);
-
-  g_bucket_mins.push_back(KiB / MEMBLOCKLEN);
+  Bucket::mins.push_back(KiB / MEMBLOCKLEN);
   for (int i = 0; i < 4; i++)
-    g_bucket_mins.push_back(L1d_capacity_per_way * (i + 1) / MEMBLOCKLEN);
+    Bucket::mins.push_back(L1d_capacity_per_way * (i + 1) / MEMBLOCKLEN);
   for (int i = 1; i < 16; i += 2)
-    g_bucket_mins.push_back(L2_capacity_per_way * (i + 1) / MEMBLOCKLEN);
+    Bucket::mins.push_back(L2_capacity_per_way * (i + 1) / MEMBLOCKLEN);
 
-  g_bucket_mins.push_back(BUCKET_INF_DIST);
+  Bucket::mins.push_back(BUCKET_INF_DIST);
 
   RD_init();
 

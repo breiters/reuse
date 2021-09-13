@@ -22,6 +22,9 @@
 // initialize / clear used structs
 void RD_init(int min1);
 
+// init global cachesim
+void RD_init_finish();
+
 // add distance buckets, starting from smallest (>0)
 // only specification of minimal distance required
 // use as last bucket min=0 to get "infinite distances" there

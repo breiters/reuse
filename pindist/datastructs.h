@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#define DATASTRUCT_UNKNOWN -1
+enum DATASTRUCTS { RD_NO_DATASTRUCT = -1 };
 
 class DatastructInfo {
 public:
@@ -33,6 +33,6 @@ private:
 };
 typedef void* Addr;
 extern void register_datastruct(DatastructInfo &info);
-extern int datstruct_num(Addr addr);
+extern int datastruct_num(Addr addr);
 extern std::vector<int> datstruct_nums(Addr addr);
 extern std::vector<DatastructInfo> g_datastructs;

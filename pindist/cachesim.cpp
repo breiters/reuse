@@ -8,12 +8,14 @@
 std::vector<CacheSim> g_cachesims;
 std::vector<CacheSim> g_cachesims_combined;
 
+CacheSim::CacheSim() {}
+
 CacheSim::CacheSim(int ds_num)
     : next_bucket_{1}, ds_num_{ds_num}, buckets_{g_buckets} {
   for (auto &b : buckets_) {
     b.aCount = 0;
     b.aCount_excl = 0;
-    b.marker = stack_.end(); // TODO: can be removed
+    // b.marker = stack_.end(); // TODO: can be removed
     // printf("min: %u\n", b.min);
   }
 }
@@ -42,19 +44,20 @@ void CacheSim::on_next_bucket_gets_active() {
  * @param mb The to memory block.
  * @return list<MemoryBlock>::iterator The stack begin iterator.
  */
-const Marker CacheSim::on_new_block(MemoryBlock mb) {
+const Marker CacheSim::on_block_new(MemoryBlock mb) {
   stack_.push_front(mb);
-
+//puts("11");
   // move markers upwards after inserting new block on stack
   move_markers(next_bucket_ - 1);
-
+//puts("22");
   // does another bucket get active?
   bool last_bucket_reached = buckets_[next_bucket_].min == 0;
   bool next_bucket_active = stack_.size() > buckets_[next_bucket_].min;
-
+//puts("33");
   if (!last_bucket_reached && next_bucket_active) {
     on_next_bucket_gets_active();
   }
+//puts("44");
   return stack_.begin();
 }
 
@@ -63,20 +66,23 @@ const Marker CacheSim::on_new_block(MemoryBlock mb) {
  *
  * @param blockIt
  */
-void CacheSim::on_block_seen(const Marker &blockIt) {
-  // if already on top do nothing
+int CacheSim::on_block_seen(const Marker &blockIt) {
+  // if already on top of stack: do nothing (bucket is zero anyway)
   if (blockIt == stack_.begin()) {
-    return;
+    return 0;
   }
 
   // move all markers below current memory blocks bucket
   int bucket = blockIt->bucket;
   move_markers(bucket);
 
-  // put current memory block on top and set its buckets to zero
+  // put current memory block on top of stack
   stack_.splice(stack_.begin(), stack_, blockIt);
 
+  // bucket of blockIt is zero now because it is on top of stack
   blockIt->bucket = 0;
+
+  return bucket;
 }
 
 void CacheSim::move_markers(int topBucket) {
@@ -86,7 +92,7 @@ void CacheSim::move_markers(int topBucket) {
     // decrement marker so it stays always on same distance to stack begin
     --buckets_[b].marker;
 
-#if 0
+#if DEBUG_LEVEL > 1
 // sanity check, but takes too long
     unsigned int distance = 0;
     for(auto it = stack_.begin(); it != buckets_[b].marker; it++) {
@@ -106,6 +112,12 @@ void CacheSim::add_datastruct(int ds_num) { ds_nums_.push_back(ds_num); }
 bool CacheSim::contains(int ds_num) const {
   return std::find(ds_nums_.begin(), ds_nums_.end(), ds_num) != ds_nums_.end();
 }
+
+/*
+ *********************************************
+ * CSV output functions
+ *********************************************
+ */
 
 #define CSV_FORMAT "%s,%d,%p,%zu,%d,%lu,%s,%u,%lu,%lu,%lu\n"
 #define CSV_FORMAT2 "%s,%s,%p,%zu,%d,%lu,%s,%u,%lu,%lu,%lu\n"
@@ -129,8 +141,10 @@ void CacheSim::print_csv(FILE *csv_out, const char *region, Bucket *buckets,
   if (ds_nums_.size() == 0) {
     auto &ds = g_datastructs[ds_num_];
     for (size_t b = 0; b < num_buckets; b++) {
+      const char *file_name = ds_num_ == RD_NO_DATASTRUCT ? "main" : ds.file_name.c_str();
+
       fprintf(csv_out, CSV_FORMAT, region, ds_num_, ds.address, ds.nbytes,
-              ds.line, ds.access_count, ds.file_name.c_str(), buckets[b].min,
+              ds.line, ds.access_count, file_name, buckets[b].min,
               buckets[b].aCount, buckets[b].aCount, buckets[b].aCount_excl);
     }
   }

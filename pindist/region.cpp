@@ -56,6 +56,8 @@ Region::~Region() {
 void Region::on_region_entry() {
   std::cout << "entry region: " << region_ << "\n";
   // make snapshot of current buckets access counts
+  global_buckets_ = g_cachesim.buckets();
+
   size_t cs_num = 0;
   for (auto &cs : g_cachesims) {
     region_buckets_on_entry_.push_back(
@@ -84,6 +86,13 @@ void Region::on_region_entry() {
 void Region::on_region_exit() {
   std::cout << "exit region: " << region_ << "\n";
   size_t cs_num = 0;
+
+  size_t b = 0;
+  for(auto buck : global_buckets_) {
+    buck.aCount += g_cachesim.buckets()[b].aCount - global_buckets_on_entry_[b].aCount;
+    b++;
+  }
+
   for (auto &cs : g_cachesims) {
     size_t b = 0;
     for (auto &buck : cs.buckets()) {
@@ -111,7 +120,7 @@ void Region::on_region_exit() {
 }
 
 void Region::print_csv(FILE *csv_out) {
-
+  g_cachesim.print_csv(csv_out, region_, global_buckets_);
   size_t cs_num = 0;
   for (auto &cs : g_cachesims) {
     cs.print_csv(csv_out, region_, region_buckets_[cs_num],

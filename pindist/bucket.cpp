@@ -15,7 +15,7 @@ Bucket::Bucket(int m) {
   aCount_excl = 0;
   aCount = 0;
   min = m;
-  marker = g_stack.end();
+  // marker = g_stack.end();
 }
 
 #if 0

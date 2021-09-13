@@ -7,17 +7,21 @@
 
 class CacheSim {
 public:
+  CacheSim();
   CacheSim(int ds_num);
   // ~CacheSim();
-  const Marker on_new_block(MemoryBlock mb);
-  void on_block_seen(const Marker &m);
+  const Marker on_block_new(MemoryBlock mb);
+  int on_block_seen(const Marker &m);
   void add_datastruct(int ds_num);
   bool contains(int ds_num) const;
-  void print_csv(FILE *csv_out, const char *region);
-  void print_csv(FILE *csv_out, const char *region,
-                 std::vector<Bucket> &buckets);
-  void print_csv(FILE *csv_out, const char *region, Bucket *buckets,
-                 size_t num_buckets);
+
+  inline void incr_access(int bucket) { buckets_[bucket].aCount++; }
+  inline void incr_access_excl(int bucket) { buckets_[bucket].aCount_excl++; }
+
+  inline void incr_access_inf() { incr_access(buckets_.size() - 1); }
+  inline void incr_access_excl_inf() { incr_access_excl(buckets_.size() - 1); }
+
+  // inline void add_bucket(int min) { buckets_.push_back(Bucket(min)); }
 
   bool operator==(const CacheSim &other) const {
     return ds_num_ == other.ds_num_ && ds_nums_ == other.ds_nums_;
@@ -29,6 +33,12 @@ public:
   inline std::vector<Bucket> &buckets() { return buckets_; }
   inline const std::vector<int> &ds_nums() const { return ds_nums_; }
   inline int ds_num() const { return ds_num_; }
+
+  void print_csv(FILE *csv_out, const char *region);
+  void print_csv(FILE *csv_out, const char *region,
+                 std::vector<Bucket> &buckets);
+  void print_csv(FILE *csv_out, const char *region, Bucket *buckets,
+                 size_t num_buckets);
 
 private:
   int next_bucket_;
@@ -57,5 +67,6 @@ template <> struct hash<CacheSim> {
 };
 } // namespace std
 
+extern CacheSim g_cachesim;
 extern std::vector<CacheSim> g_cachesims;
 extern std::vector<CacheSim> g_cachesims_combined;

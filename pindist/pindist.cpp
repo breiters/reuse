@@ -170,7 +170,7 @@ VOID Exit(INT32 code, VOID *v) {
   else
     pStr[0] = 0;
 
-  RD_printHistogram(out, pStr, MEMBLOCKLEN);
+  // RD_printHistogram(out, pStr, MEMBLOCKLEN);
 
   fprintf(out, "%s  ignored stack accesses: %lu\n", pStr, stackAccesses);
 
@@ -217,7 +217,7 @@ int main(int argc, char *argv[]) {
   int L1d_capacity_per_way = 64 * KiB / 4;
   int L2_capacity_per_way = 8 * MiB / 16;
 
-  RD_init(4);
+  RD_init(KiB / MEMBLOCKLEN);
 
   // RD_init(L1d_capacity_per_way / MEMBLOCKLEN);
   for (int i = 0; i < 4; i++)
@@ -226,6 +226,7 @@ int main(int argc, char *argv[]) {
     RD_addBucket(L2_capacity_per_way * (i + 1) / MEMBLOCKLEN);
 
   // RD_addBucket(L2_capacity_per_way * 16 / MEMBLOCKLEN);
+  RD_init_finish();
 
   stackAccesses = 0;
 

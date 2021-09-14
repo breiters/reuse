@@ -1,6 +1,10 @@
 CXX           := g++
 TOOL_ROOTS    := pindist pintrace
-TOOL_CXXFLAGS += -std=c++14 -DNDEBUG #-fno-inline
+TOOL_CXXFLAGS += -std=c++14
+TOOL_CXXFLAGS += -DNDEBUG
+#TOOL_CXXFLAGS += -march=native -mtune=native
+#TOOL_CXXFLAGS += -DDEBUG_LEVEL=1
+#TOOL_CXXFLAGS += -fno-inline
 
 CXXFLAGS=-O3 -fomit-frame-pointer -fno-strict-aliasing -std=c++11
 #CXXFLAGS=-g -O2 -std=c++11

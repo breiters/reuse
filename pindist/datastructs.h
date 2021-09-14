@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#define DATASTRUCT_UNKNOWN -1
+enum DATASTRUCTS { RD_NO_DATASTRUCT = -1 };
 
 class DatastructInfo {
 public:
@@ -16,23 +16,25 @@ public:
   std::string allocator;
   std::string file_name;
 
-/*
-  inline void print(void) {
-    cout << "============================\n";
-    cout << "bytes allocated by " << allocator << "(): " << nbytes << '\n';
-    cout << "in: " << file_name << " line: ?" << line << "? col: " << col
-         << '\n';
-    cout << "located at address: " << hex << address << dec << '\n';
-    cout << "============================\n";
-  }
-*/
+  /*
+    inline void print(void) {
+      cout << "============================\n";
+      cout << "bytes allocated by " << allocator << "(): " << nbytes << '\n';
+      cout << "in: " << file_name << " line: ?" << line << "? col: " << col
+           << '\n';
+      cout << "located at address: " << hex << address << dec << '\n';
+      cout << "============================\n";
+    }
+  */
 
-  inline void print(void) { }
+  inline void print(void) {}
 
 private:
 };
 
+typedef void *Addr;
 extern void register_datastruct(DatastructInfo &info);
-extern int datstruct_num(Addr addr);
-
+extern int datastruct_num(Addr addr);
+extern std::vector<int> datstruct_nums(Addr addr);
 extern std::vector<DatastructInfo> g_datastructs;
+extern std::vector<std::vector<int>> g_indices_of_ds;

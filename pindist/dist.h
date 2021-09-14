@@ -20,7 +20,7 @@
 #define RD_VERBOSE 0
 
 // initialize / clear used structs
-void RD_init(int min1);
+void RD_init();
 
 // add distance buckets, starting from smallest (>0)
 // only specification of minimal distance required
@@ -47,13 +47,4 @@ int RD_get_hist(unsigned int bucket, unsigned int &min,
 //  <pStr> is prefix for every line, distances scaled by <blockSize>
 void RD_printHistogram(FILE *out, const char *pStr, int blockSize);
 
-class MarkerContainer {
-public:
-  MarkerContainer(Marker, Marker);
-  MarkerContainer();
-  Marker global_marker;
-  Marker ds_marker;
-  //   std::vector<Marker> negate_markers;
-  //   std::vector<Marker> combine_markers;
-  //   std::vector<Marker> combine_negate_markers;
-};
+void RD_print_csv();

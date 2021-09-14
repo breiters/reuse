@@ -1,32 +1,63 @@
 
-#include "bucket.h"
 #include "datastructs.h"
-#include "region.h"
+#include "bucket.h"
 #include "cachesim.h"
+#include "region.h"
 
 #include <cassert>
 #include <vector>
 
+std::vector<std::vector<int>> g_indices_of_ds;
 std::vector<DatastructInfo> g_datastructs;
-// extern std::vector<Bucket> g_buckets;
 
-void register_datastruct(DatastructInfo &info) {
-  g_datastructs.push_back(info);
-  g_cachesims.push_back(CacheSim{static_cast<int>(g_datastructs.size()) - 1});
-
-  for (auto &bucket : g_buckets) {
-    bucket.register_datastruct();
-    assert(bucket.ds_aCount.size() == g_datastructs.size());
-    assert(bucket.ds_markers.size() == g_datastructs.size());
+/** combine 1 level (pairs) TODO: combine N levels **/
+[[maybe_unused]] static void combine(int ds_num, [[maybe_unused]] int level) {
+  static bool first = true;
+  if (first) {
+    first = false;
+    return;
   }
 
-  for (auto &region : g_regions) {
-    region.second->register_datastruct();
+  int ds_other = 0;
+  for ([[maybe_unused]] auto &ds : g_datastructs) {
+    // printf("combining: %d, %d in csnum: %d\n", ds1, ds_num, (int)g_cachesims_combined.size());
+    int cs_num = static_cast<int>(g_cachesims_combined.size() - 1);
+
+    g_indices_of_ds[ds_num].push_back(cs_num + 1);
+    g_indices_of_ds[ds_other].push_back(cs_num + 1);
+
+    g_cachesims_combined.push_back(CacheSim{cs_num});
+    g_cachesims_combined.back().add_datastruct(ds_other);
+    g_cachesims_combined.back().add_datastruct(ds_num);
+    ds_other++;
   }
 }
 
-// TODO: use better algorithm to get datastruct
-int datstruct_num(Addr addr) {
+void register_datastruct(DatastructInfo &info) {
+  g_indices_of_ds.push_back(std::vector<int>{});
+  
+  int num_datastructs = static_cast<int>(g_datastructs.size());
+  g_cachesims.push_back(CacheSim{num_datastructs});
+
+  combine(num_datastructs, 1);
+  
+  g_datastructs.push_back(info);
+
+#if DEBUG_LEVEL > 0
+  int ds_num = 0;
+  for (auto ds : g_indices_of_ds) {
+    printf("ds %d in: \n", ds_num);
+    for (int cs : ds) {
+      printf(" %d ", cs);
+    }
+    printf("\n");
+    ds_num++;
+  }
+#endif /* DEBUG_LEVEL */
+}
+
+/** TODO: maybe use better algorithm to get datastruct **/
+int datastruct_num(Addr addr) {
   int i = 0;
   for (auto &ds : g_datastructs) {
     if ((uint64_t)addr >= (uint64_t)ds.address &&
@@ -35,5 +66,5 @@ int datstruct_num(Addr addr) {
     }
     i++;
   }
-  return DATASTRUCT_UNKNOWN;
+  return RD_NO_DATASTRUCT;
 }

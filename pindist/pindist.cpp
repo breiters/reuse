@@ -13,6 +13,7 @@
 #include <cstring>
 #include <unistd.h>
 
+#include "bucket.h"
 #include "dist.h"
 #include "imgload.h"
 
@@ -36,12 +37,9 @@ unsigned long ignoredReads, ignoredWrites;
 /* Command line options                                                  */
 /* ===================================================================== */
 
-KNOB<int> KnobMinDist(KNOB_MODE_WRITEONCE, "pintool", "m", "4096",
-                      "minimum bucket distance");
-KNOB<int> KnobDoubleSteps(KNOB_MODE_WRITEONCE, "pintool", "s", "1",
-                          "number of buckets for doubling distance");
-KNOB<bool> KnobPIDPrefix(KNOB_MODE_WRITEONCE, "pintool", "p", "0",
-                         "prepend output by --PID--");
+KNOB<int> KnobMinDist(KNOB_MODE_WRITEONCE, "pintool", "m", "4096", "minimum bucket distance");
+KNOB<int> KnobDoubleSteps(KNOB_MODE_WRITEONCE, "pintool", "s", "1", "number of buckets for doubling distance");
+KNOB<bool> KnobPIDPrefix(KNOB_MODE_WRITEONCE, "pintool", "p", "0", "prepend output by --PID--");
 
 /* ===================================================================== */
 /* Handle Memory block access (aligned at multiple of MEMBLOCKLEN)       */
@@ -128,24 +126,19 @@ VOID stackAccess() { stackAccesses++; }
 
 VOID Instruction(INS ins, VOID *v) {
   if (IGNORE_STACK && (INS_IsStackRead(ins) || INS_IsStackWrite(ins))) {
-    INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR)stackAccess,
-                             IARG_END);
+    INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR)stackAccess, IARG_END);
     return;
   }
 
   UINT32 memOperands = INS_MemoryOperandCount(ins);
   for (UINT32 memOp = 0; memOp < memOperands; memOp++) {
     if (INS_MemoryOperandIsRead(ins, memOp))
-      INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR)memRead,
-                               IARG_THREAD_ID, IARG_MEMORYOP_EA, memOp,
-                               IARG_UINT32, INS_MemoryOperandSize(ins, memOp),
-                               IARG_END);
+      INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR)memRead, IARG_THREAD_ID, IARG_MEMORYOP_EA, memOp,
+                               IARG_UINT32, INS_MemoryOperandSize(ins, memOp), IARG_END);
 
     if (INS_MemoryOperandIsWritten(ins, memOp))
-      INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR)memWrite,
-                               IARG_THREAD_ID, IARG_MEMORYOP_EA, memOp,
-                               IARG_UINT32, INS_MemoryOperandSize(ins, memOp),
-                               IARG_END);
+      INS_InsertPredicatedCall(ins, IPOINT_BEFORE, (AFUNPTR)memWrite, IARG_THREAD_ID, IARG_MEMORYOP_EA, memOp,
+                               IARG_UINT32, INS_MemoryOperandSize(ins, memOp), IARG_END);
   }
 }
 
@@ -153,9 +146,7 @@ VOID Instruction(INS ins, VOID *v) {
 /* Callbacks from Pin                                                    */
 /* ===================================================================== */
 
-VOID ThreadStart(THREADID t, CONTEXT *ctxt, INT32 flags, VOID *v) {
-  fprintf(stderr, "Thread %d started\n", t);
-}
+VOID ThreadStart(THREADID t, CONTEXT *ctxt, INT32 flags, VOID *v) { fprintf(stderr, "Thread %d started\n", t); }
 
 /* ===================================================================== */
 /* Output results at exit                                                */
@@ -174,8 +165,12 @@ VOID Exit(INT32 code, VOID *v) {
 
   fprintf(out, "%s  ignored stack accesses: %lu\n", pStr, stackAccesses);
 
-  fprintf(out, "%s  ignored accesses by thread != 0: %lu reads, %lu writes\n",
-          pStr, ignoredReads, ignoredWrites);
+  fprintf(out, "%s  ignored accesses by thread != 0: %lu reads, %lu writes\n", pStr, ignoredReads, ignoredWrites);
+
+  // original code has min = 0 to define infinite distance
+  // change to max limit to distinguish buckets zero dist from buckets inf dist
+  Bucket::mins.back() = std::numeric_limits<unsigned>::max();
+  RD_print_csv();
 }
 
 /* ===================================================================== */
@@ -183,8 +178,7 @@ VOID Exit(INT32 code, VOID *v) {
 /* ===================================================================== */
 
 INT32 Usage() {
-  PIN_ERROR("PinDist: Get the Stack Reuse Distance Histogram\n" +
-            KNOB_BASE::StringKnobSummary() + "\n");
+  PIN_ERROR("PinDist: Get the Stack Reuse Distance Histogram\n" + KNOB_BASE::StringKnobSummary() + "\n");
   return -1;
 }
 
@@ -203,7 +197,7 @@ int main(int argc, char *argv[]) {
     // printf("add bucket: %d\n", (int)(d / MEMBLOCKLEN));
     RD_addBucket((int)(d / MEMBLOCKLEN));
   }
-#endif
+#endif /* USE_OLD_CODE */
 
   // required buckets for a64fx:
   // 4-way L1d 64KiB => 4 Buckets with distance 64KiB / 4
@@ -214,16 +208,18 @@ int main(int argc, char *argv[]) {
 
   int L1d_capacity_per_way = 64 * KiB / 4;
   int L2_capacity_per_way = 8 * MiB / 16;
+  
+  Bucket::mins.push_back(0);
 
-  RD_init(4);
-
-  // RD_init(L1d_capacity_per_way / MEMBLOCKLEN);
+  Bucket::mins.push_back(KiB / MEMBLOCKLEN);
   for (int i = 0; i < 4; i++)
-    RD_addBucket(L1d_capacity_per_way * (i + 1) / MEMBLOCKLEN);
+    Bucket::mins.push_back(L1d_capacity_per_way * (i + 1) / MEMBLOCKLEN);
   for (int i = 1; i < 16; i += 2)
-    RD_addBucket(L2_capacity_per_way * (i + 1) / MEMBLOCKLEN);
+    Bucket::mins.push_back(L2_capacity_per_way * (i + 1) / MEMBLOCKLEN);
 
-  // RD_addBucket(L2_capacity_per_way * 16 / MEMBLOCKLEN);
+  Bucket::mins.push_back(BUCKET_INF_DIST);
+
+  RD_init();
 
   stackAccesses = 0;
 

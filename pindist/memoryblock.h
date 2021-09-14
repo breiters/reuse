@@ -16,9 +16,11 @@ public:
   MemoryBlock(Addr a); // generated on first access
   MemoryBlock(Addr a, int num);
 
+/*
   inline void print(char *b) { sprintf(b, "block at bucket %d", bucket); }
   inline void incACount() {}
   inline unsigned long getACount() { return 1; }
+*/
 
   int bucket;    // current bucket
   int ds_num;    // datastructure it belongs to
@@ -46,4 +48,4 @@ private:
 };
 #endif
 
-using Marker = std::list<MemoryBlock>::iterator;
+using StackIterator = std::list<MemoryBlock>::iterator;

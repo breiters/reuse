@@ -36,7 +36,7 @@ void CacheSim::on_next_bucket_gets_active() {
  * @param mb The to memory block.
  * @return list<MemoryBlock>::iterator The stack begin iterator.
  */
-const Marker CacheSim::on_block_new(MemoryBlock mb) {
+const StackIterator CacheSim::on_block_new(MemoryBlock mb) {
   stack_.push_front(mb);
 
   // move markers upwards after inserting new block on stack
@@ -54,7 +54,7 @@ const Marker CacheSim::on_block_new(MemoryBlock mb) {
  *
  * @param blockIt
  */
-int CacheSim::on_block_seen(/*const*/ Marker &blockIt) {
+int CacheSim::on_block_seen(const StackIterator &blockIt) {
   // if already on top of stack: do nothing (bucket is zero anyway)
   if (blockIt == stack_.begin()) {
     return 0;
@@ -110,10 +110,10 @@ bool CacheSim::contains(int ds_num) const {
 #define CSV_FORMAT "%s,%d,%p,%zu,%d,%lu,%s,%u,%lu,%lu\n"
 #define CSV_FORMAT2 "%s,%s,%p,%zu,%d,%lu,%s,%u,%lu,%lu\n"
 
-void CacheSim::print_csv(FILE *csv_out, const char *region) { print_csv(csv_out, region, buckets_); }
+void CacheSim::print_csv(FILE *csv_out, const char *region) const { print_csv(csv_out, region, buckets_); }
 
-void CacheSim::print_csv(FILE *csv_out, const char *region, std::vector<Bucket> &buckets) {
-  // single datastruct or all accesses
+void CacheSim::print_csv(FILE *csv_out, const char *region, const std::vector<Bucket> &buckets) const {
+  // is single datastruct or global address space accesses
   if (ds_nums_.size() == 0)
     if (ds_num_ == RD_NO_DATASTRUCT) {
       for (size_t b = 0; b < buckets.size(); b++) {
@@ -127,7 +127,7 @@ void CacheSim::print_csv(FILE *csv_out, const char *region, std::vector<Bucket> 
                 ds.file_name.c_str(), Bucket::mins[b], buckets[b].aCount, buckets[b].aCount_excl);
       }
     }
-  // combined datastruct
+  // is combined datastruct access
   else {
     size_t MAX_LEN = 512;
     char buf[MAX_LEN];

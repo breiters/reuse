@@ -10,7 +10,7 @@ public:
   Bucket();
   unsigned long aCount;
   unsigned long aCount_excl;
-  Marker marker;
+  StackIterator marker;
 
   static std::vector<unsigned> mins;
 

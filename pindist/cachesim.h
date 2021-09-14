@@ -12,8 +12,8 @@ public:
   CacheSim(int ds_num);
 
   // ~CacheSim();
-  const Marker on_block_new(MemoryBlock mb);
-  int on_block_seen(/*const*/ Marker &m);
+  const StackIterator on_block_new(MemoryBlock mb);
+  int on_block_seen(const StackIterator &it);
   void add_datastruct(int ds_num);
   bool contains(int ds_num) const;
 
@@ -23,18 +23,15 @@ public:
   inline void incr_access_inf() { incr_access(buckets_.size() - 1); }
   inline void incr_access_excl_inf() { incr_access_excl(buckets_.size() - 1); }
 
-  bool operator==(const CacheSim &other) const {
-    return ds_num_ == other.ds_num_ && ds_nums_ == other.ds_nums_;
-  }
+  bool operator==(const CacheSim &other) const { return ds_num_ == other.ds_num_ && ds_nums_ == other.ds_nums_; }
 
   inline const std::list<MemoryBlock> &stack() const { return stack_; }
   inline std::vector<Bucket> &buckets() { return buckets_; }
   inline const std::vector<int> &ds_nums() const { return ds_nums_; }
   inline int ds_num() const { return ds_num_; }
 
-  void print_csv(FILE *csv_out, const char *region);
-  void print_csv(FILE *csv_out, const char *region, std::vector<Bucket> &buckets);
-  void print_csv(FILE *csv_out, const char *region, Bucket *buckets, size_t num_buckets);
+  void print_csv(FILE *csv_out, const char *region) const;
+  void print_csv(FILE *csv_out, const char *region, const std::vector<Bucket> &buckets) const;
 
 private:
   int next_bucket_;

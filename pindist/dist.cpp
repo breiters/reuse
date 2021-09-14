@@ -21,15 +21,12 @@
 #include "region.h"
 // #include "khash.h"
 
-#define DEBUG(x) printf(#x " : %d\n", x)
-
 using std::list;
 using std::string;
 using std::unordered_map;
 using std::vector;
 
 extern string g_application_name;
-// extern vector<vector<int>> g_csindices_of_ds;
 
 // make sure that memblocks are powers of two
 static constexpr bool is_pow2(int a) { return !(a & (a - 1)); }
@@ -61,22 +58,22 @@ template <> struct hash<S> {
 
 // each memory block can be contained in multiple stacks
 // so we need to store the iterators to memory block in each stack
-struct MarkerContainer {
-  MarkerContainer(Marker, Marker, std::vector<Marker>);
-  MarkerContainer();
-  Marker global_marker;
-  Marker ds_marker;
-  std::vector<Marker> combine_markers;
+struct IteratorContainer {
+  IteratorContainer(StackIterator, StackIterator, vector<StackIterator>);
+  IteratorContainer();
+  StackIterator global_iterator;
+  StackIterator ds_iterator;
+  vector<StackIterator> combine_iterators;
 };
 
-MarkerContainer::MarkerContainer() {}
-MarkerContainer::MarkerContainer(Marker g, Marker ds, std::vector<Marker> cds)
-    : global_marker{g}, ds_marker{ds}, combine_markers{cds} {};
+IteratorContainer::IteratorContainer() {}
+IteratorContainer::IteratorContainer(StackIterator g, StackIterator ds, vector<StackIterator> cds)
+    : global_iterator{g}, ds_iterator{ds}, combine_iterators{cds} {};
 
 // map with custom hash function:
-using addr_map = std::unordered_map<Addr, MarkerContainer, std::hash<S>>;
-// using addr_map = std::unordered_map<Addr, MarkerContainer>;
-addr_map g_addrMap;
+using AddrMap = std::unordered_map<Addr, IteratorContainer, std::hash<S>>;
+// using addr_map = std::unordered_map<Addr, IteratorContainer>;
+AddrMap g_addrMap;
 
 static void on_accessed_before() {
   // for all caches where ds_num is included:
@@ -94,7 +91,7 @@ static void on_accessed_before() {
     g_cachesims[ds_num].incr_access_excl(0);
 
     // combined datastructs
-    for (int csc : g_csindices_of_ds[ds_num]) {
+    for (int csc : g_indices_of_ds[ds_num]) {
       g_cachesims_combined[csc].incr_access(0);
       g_cachesims_combined[csc].incr_access_excl(0);
     }
@@ -117,26 +114,26 @@ static void on_block_new(Addr addr) {
 
   MemoryBlock mb = MemoryBlock{addr, ds_num};
 
-  MarkerContainer mc{};
-  mc.global_marker = g_cachesim.on_block_new(mb);
+  IteratorContainer ic{};
+  ic.global_iterator = g_cachesim.on_block_new(mb);
   g_cachesim.incr_access_inf();
 
   if (ds_num != RD_NO_DATASTRUCT) {
-    mc.ds_marker = g_cachesims[ds_num].on_block_new(mb);
+    ic.ds_iterator = g_cachesims[ds_num].on_block_new(mb);
     g_cachesims[ds_num].incr_access_inf();
     g_cachesims[ds_num].incr_access_excl_inf();
 
     // account for access to combined dastructs
-    for (int csc : g_csindices_of_ds[ds_num]) {
+    for (int csc : g_indices_of_ds[ds_num]) {
       assert(g_cachesims_combined[csc].contains(ds_num));
-      mc.combine_markers.push_back(g_cachesims_combined[csc].on_block_new(mb));
+      ic.combine_iterators.push_back(g_cachesims_combined[csc].on_block_new(mb));
       g_cachesims_combined[csc].incr_access_inf();
       g_cachesims_combined[csc].incr_access_excl_inf();
     }
   }
 
-  // add new marker container to map
-  g_addrMap[addr] = mc;
+  // add new iterator container to map
+  g_addrMap[addr] = ic;
 
 #if USE_OLD_CODE
   if (RD_VERBOSE > 1)
@@ -148,24 +145,24 @@ static void on_block_new(Addr addr) {
 #endif
 }
 
-static void on_block_seen(addr_map::iterator it) {
+static void on_block_seen(AddrMap::iterator it) {
   // memory block already seen - get iterators in stacks
-  auto markers = it->second;
+  auto iterators = it->second;
 
-  int global_bucket = g_cachesim.on_block_seen(markers.global_marker);
+  int global_bucket = g_cachesim.on_block_seen(iterators.global_iterator);
   g_cachesim.incr_access(global_bucket);
 
-  int ds_num = markers.global_marker->ds_num;
+  int ds_num = iterators.global_iterator->ds_num;
 
   if (ds_num != RD_NO_DATASTRUCT) {
-    int ds_bucket = g_cachesims[ds_num].on_block_seen(markers.ds_marker);
+    int ds_bucket = g_cachesims[ds_num].on_block_seen(iterators.ds_iterator);
     g_cachesims[ds_num].incr_access(global_bucket);
     g_cachesims[ds_num].incr_access_excl(ds_bucket);
 
     int m = 0;
-    for (int csd : g_csindices_of_ds[ds_num]) {
+    for (int csd : g_indices_of_ds[ds_num]) {
       assert(g_cachesims_combined[csd].contains(ds_num));
-      int csc_bucket = g_cachesims_combined[csd].on_block_seen(markers.combine_markers[m]);
+      int csc_bucket = g_cachesims_combined[csd].on_block_seen(iterators.combine_iterators[m]);
       g_cachesims_combined[csd].incr_access(global_bucket);
       g_cachesims_combined[csd].incr_access_excl(csc_bucket);
       m++;
@@ -180,7 +177,6 @@ void RD_accessBlock(Addr addr) {
     on_accessed_before();
   } else {
     auto it = g_addrMap.find(addr);
-
     if (it == g_addrMap.end()) {
       on_block_new(addr);
     } else {
@@ -241,32 +237,6 @@ void RD_init() {
   // global cache
   g_cachesim = CacheSim{RD_NO_DATASTRUCT};
 }
-
-#if USE_OLD_CODE
-
-void RD_init(int min1) {
-  g_addrMap.clear();
-  g_datastructs.clear();
-  // addrMap.rehash(4000000);
-
-  g_buckets.clear();
-  g_buckets.push_back(Bucket(0));               // bucket starting with distance 0
-  g_buckets.push_back(Bucket(min1));            // first real bucket of interest
-  g_buckets.push_back(Bucket(BUCKET_INF_DIST)); // for "infinite" distance
-  // g_nextBucket = 1;
-}
-
-// add distance buckets, starting from smallest (>0)
-// only specification of minimal distance required
-void RD_addBucket(unsigned int min) {
-  // fprintf(stderr, "Add bucket with dist %d (last dist: %d)\n",
-  // min, g_buckets[g_buckets.size()-2].min);
-  assert(g_buckets.size() > 2);
-  assert(g_buckets[g_buckets.size() - 2].min < min);
-
-  g_buckets.insert(g_buckets.end() - 1, Bucket(min));
-}
-#endif
 
 // get statistics
 void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
@@ -388,9 +358,7 @@ void RD_printHistogram(FILE *out, const char *pStr, int blockSize) {
           pStr, pStr, stack_size, ((double)stack_size * blockSize) / 1000000.0, pStr, aCount);
 }
 
-#define FUTURE_IMPROVED_HASH 0
 #if FUTURE_IMPROVED_HASH
-
 //-------------------------------------------------------------------------
 // Specialization of unordered_map to use masking for bucket calculation
 struct _Mod_myrange_hashing {
@@ -458,7 +426,7 @@ void RD_checkConsistency() {
             g_buckets[b].min, g_buckets[b].aCount);
   }
 
-  Marker stackIt;
+  StackIterator stackIt;
   for (stackIt = g_stack.begin(); stackIt != g_stack.end(); ++stackIt, ++d) {
     if (d == g_buckets[b + 1].min) {
       b++;

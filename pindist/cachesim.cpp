@@ -16,10 +16,15 @@ CacheSim::CacheSim(int ds_num) : next_bucket_{1}, ds_num_{ds_num}, buckets_{std:
 void CacheSim::on_next_bucket_gets_active() {
   // set new buckets marker to end of stack first then set marker to last stack element
   buckets_[next_bucket_].marker = stack_.end();
+
   --(buckets_[next_bucket_].marker);
 
-  assert(buckets_[next_bucket_].marker != stack_.begin());
-  assert(buckets_[next_bucket_].marker != stack_.end());
+#if RD_DEBUG
+  StackIterator it = stack_.begin();
+  for (unsigned i = 0; i < Bucket::mins[next_bucket_]; i++)
+    it++;
+  assert(it == buckets_[next_bucket_].marker);
+#endif
 
   // last stack element is now in the next higher bucket
   (buckets_[next_bucket_].marker)->bucket++;
@@ -36,7 +41,7 @@ void CacheSim::on_next_bucket_gets_active() {
  * @param mb The to memory block.
  * @return list<MemoryBlock>::iterator The stack begin iterator.
  */
-const StackIterator CacheSim::on_block_new(MemoryBlock mb) {
+const StackIterator CacheSim::on_block_new(MemoryBlock &mb) {
   stack_.push_front(mb);
 
   // move markers upwards after inserting new block on stack
@@ -82,7 +87,7 @@ void CacheSim::move_markers(int topBucket) {
 
 #if DEBUG_LEVEL > 1
     // sanity check for bucket distance to stack begin, but takes too long
-    unsigned int distance = 0;
+    unsigned distance = 0;
     for (auto it = stack_.begin(); it != buckets_[b].marker; it++) {
       distance++;
     }
@@ -121,7 +126,7 @@ void CacheSim::print_csv(FILE *csv_out, const char *region, const std::vector<Bu
                 buckets[b].aCount, buckets[b].aCount_excl);
       }
     } else {
-      auto &ds = g_datastructs[ds_num_];
+      auto &ds = Datastruct::datastructs[ds_num_];
       for (size_t b = 0; b < buckets.size(); b++) {
         fprintf(csv_out, CSV_FORMAT, region, ds_num_, ds.address, ds.nbytes, ds.line, ds.access_count,
                 ds.file_name.c_str(), Bucket::mins[b], buckets[b].aCount, buckets[b].aCount_excl);
@@ -137,7 +142,7 @@ void CacheSim::print_csv(FILE *csv_out, const char *region, const std::vector<Bu
     size_t nbytes = 0;
     for (auto num : ds_nums_) {
       offset += snprintf(buf + offset, MAX_LEN - offset, "%d | ", num);
-      nbytes += g_datastructs[num].nbytes;
+      nbytes += Datastruct::datastructs[num].nbytes;
     }
     buf[offset - 2] = ']';
     buf[offset - 1] = '\0';

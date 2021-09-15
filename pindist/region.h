@@ -15,8 +15,7 @@ public:
 
   std::vector<std::vector<Bucket>> buckets_;
   std::vector<std::vector<Bucket>> buckets_entry_;
-  // std::vector<Bucket *> buckets_;
-  // std::vector<Bucket *> buckets_entry_;
+
   // std::unordered_map<CacheSim, std::vector<Bucket>> region_buckets_;
   // std::unordered_map<CacheSim, std::vector<Bucket>> region_buckets_on_entry_;
 

@@ -45,7 +45,6 @@ static_assert(ffs_constexpr(256) == 8); // sanity check
 static constexpr int first_set = ffs_constexpr(MEMBLOCKLEN);
 
 struct S {}; // dummy class to provide custom hash object
-
 namespace std {
 template <> struct hash<S> {
   std::size_t operator()(Addr const &s) const noexcept {
@@ -91,15 +90,14 @@ static void on_accessed_before() {
     g_cachesims[ds_num].incr_access_excl(0);
 
     // combined datastructs
-    for (int csc : g_indices_of_ds[ds_num]) {
-      g_cachesims_combined[csc].incr_access(0);
-      g_cachesims_combined[csc].incr_access_excl(0);
+    for (int idx : Datastruct::contained_indices[ds_num]) {
+      g_cachesims_combined[idx].incr_access(0);
+      g_cachesims_combined[idx].incr_access_excl(0);
     }
   }
 }
 
 // new memory block
-// returns begin of stack
 static void on_block_new(Addr addr) {
   // memory block not seen yet
   //
@@ -110,8 +108,7 @@ static void on_block_new(Addr addr) {
   // add block to stack and move markers and increment bucket of memory block
   // that move to next bucket
   //
-  int ds_num = datastruct_num(addr);
-
+  int ds_num = Datastruct::datastruct_num(addr);
   MemoryBlock mb = MemoryBlock{addr, ds_num};
 
   IteratorContainer ic{};
@@ -124,11 +121,11 @@ static void on_block_new(Addr addr) {
     g_cachesims[ds_num].incr_access_excl_inf();
 
     // account for access to combined dastructs
-    for (int csc : g_indices_of_ds[ds_num]) {
-      assert(g_cachesims_combined[csc].contains(ds_num));
-      ic.combine_iterators.push_back(g_cachesims_combined[csc].on_block_new(mb));
-      g_cachesims_combined[csc].incr_access_inf();
-      g_cachesims_combined[csc].incr_access_excl_inf();
+    for (int idx : Datastruct::contained_indices[ds_num]) {
+      assert(g_cachesims_combined[idx].contains(ds_num));
+      ic.combine_iterators.push_back(g_cachesims_combined[idx].on_block_new(mb));
+      g_cachesims_combined[idx].incr_access_inf();
+      g_cachesims_combined[idx].incr_access_excl_inf();
     }
   }
 
@@ -160,11 +157,11 @@ static void on_block_seen(AddrMap::iterator it) {
     g_cachesims[ds_num].incr_access_excl(ds_bucket);
 
     int m = 0;
-    for (int csd : g_indices_of_ds[ds_num]) {
-      assert(g_cachesims_combined[csd].contains(ds_num));
-      int csc_bucket = g_cachesims_combined[csd].on_block_seen(iterators.combine_iterators[m]);
-      g_cachesims_combined[csd].incr_access(global_bucket);
-      g_cachesims_combined[csd].incr_access_excl(csc_bucket);
+    for (int idx : Datastruct::contained_indices[ds_num]) {
+      assert(g_cachesims_combined[idx].contains(ds_num));
+      int csc_bucket = g_cachesims_combined[idx].on_block_seen(iterators.combine_iterators[m]);
+      g_cachesims_combined[idx].incr_access(global_bucket);
+      g_cachesims_combined[idx].incr_access_excl(csc_bucket);
       m++;
     }
   }
@@ -233,7 +230,6 @@ void RD_print_csv() {
 
 void RD_init() {
   g_addrMap.clear();
-  g_datastructs.clear();
   // global cache
   g_cachesim = CacheSim{RD_NO_DATASTRUCT};
 }

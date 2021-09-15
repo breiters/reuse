@@ -12,7 +12,7 @@ public:
   CacheSim(int ds_num);
 
   // ~CacheSim();
-  const StackIterator on_block_new(MemoryBlock mb);
+  const StackIterator on_block_new(MemoryBlock &mb);
   int on_block_seen(const StackIterator &it);
   void add_datastruct(int ds_num);
   bool contains(int ds_num) const;
@@ -23,15 +23,18 @@ public:
   inline void incr_access_inf() { incr_access(buckets_.size() - 1); }
   inline void incr_access_excl_inf() { incr_access_excl(buckets_.size() - 1); }
 
-  bool operator==(const CacheSim &other) const { return ds_num_ == other.ds_num_ && ds_nums_ == other.ds_nums_; }
+  // bool operator==(const CacheSim &other) const { return ds_num_ == other.ds_num_ && ds_nums_ == other.ds_nums_; }
 
   inline const std::list<MemoryBlock> &stack() const { return stack_; }
   inline std::vector<Bucket> &buckets() { return buckets_; }
-  inline const std::vector<int> &ds_nums() const { return ds_nums_; }
-  inline int ds_num() const { return ds_num_; }
+
+  // inline const std::vector<int> &ds_nums() const { return ds_nums_; }
+  // inline int ds_num() const { return ds_num_; }
 
   void print_csv(FILE *csv_out, const char *region) const;
   void print_csv(FILE *csv_out, const char *region, const std::vector<Bucket> &buckets) const;
+
+  static std::vector<CacheSim> cachesims;
 
 private:
   int next_bucket_;
@@ -44,6 +47,11 @@ private:
   void on_next_bucket_gets_active();
 };
 
+extern CacheSim g_cachesim;
+extern std::vector<CacheSim> g_cachesims;
+extern std::vector<CacheSim> g_cachesims_combined;
+
+#if NEED_HASHMAP
 namespace std {
 template <> struct hash<CacheSim> {
   std::size_t operator()(CacheSim const &cs) const noexcept {
@@ -59,7 +67,4 @@ template <> struct hash<CacheSim> {
   }
 };
 } // namespace std
-
-extern CacheSim g_cachesim;
-extern std::vector<CacheSim> g_cachesims;
-extern std::vector<CacheSim> g_cachesims_combined;
+#endif

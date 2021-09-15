@@ -7,19 +7,17 @@
 #include <cxxabi.h>
 #include <iostream>
 
-/** TODO: REMOVE RAW PTR AND USE vector OR unordered_map FOR SNAPSHOTS **/
-
 std::unordered_map<char *, Region *> g_regions;
 
 Region::Region(char *region) : region_{strdup(region)}, global_buckets_{std::vector<Bucket>{Bucket::mins.size()}} {
   // add region buckets for every CacheSim
   // init with zero
-  size_t num_buckets = g_cachesims.size() + g_cachesims_combined.size();
+  size_t num_cachesims = g_cachesims.size() + g_cachesims_combined.size();
 
-  buckets_.reserve(num_buckets);
-  buckets_entry_.reserve(num_buckets);
+  buckets_.reserve(num_cachesims);
+  buckets_entry_.reserve(num_cachesims);
 
-  for (size_t i = 0; i < num_buckets; i++) {
+  for (size_t i = 0; i < num_cachesims; i++) {
     buckets_.push_back(std::vector<Bucket>{Bucket::mins.size()});
     buckets_entry_.push_back(std::vector<Bucket>{Bucket::mins.size()});
   }
@@ -72,6 +70,11 @@ void Region::on_region_exit() {
     }
     cs_num++;
   }
+}
+
+void Region::register_datastruct() {
+  buckets_.push_back(std::vector<Bucket>{Bucket::mins.size()});
+  buckets_entry_.push_back(std::vector<Bucket>{Bucket::mins.size()});
 }
 
 void Region::demangle_name() {

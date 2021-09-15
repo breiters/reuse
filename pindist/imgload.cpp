@@ -21,7 +21,7 @@ std::string g_application_name;
 typedef VOID *(*FP_MALLOC)(size_t);
 // This is the replacement routine.
 VOID *NewMalloc(FP_MALLOC orgFuncptr, UINT32 arg0, ADDRINT returnIp) {
-  DatastructInfo info;
+  Datastruct info;
 
   // Call the relocated entry point of the original (replaced) routine.
   info.address = orgFuncptr(arg0);
@@ -36,7 +36,7 @@ VOID *NewMalloc(FP_MALLOC orgFuncptr, UINT32 arg0, ADDRINT returnIp) {
 
   // TODO: case file_name length == 0 ?
   if (info.file_name.length() > 0) {
-    register_datastruct(info);
+    Datastruct::register_datastruct(info);
     // info.print();
   }
 
@@ -45,7 +45,7 @@ VOID *NewMalloc(FP_MALLOC orgFuncptr, UINT32 arg0, ADDRINT returnIp) {
 
 typedef void *(*fp_calloc)(size_t, size_t);
 VOID *NewCalloc(fp_calloc orgFuncptr, UINT64 arg0, UINT64 arg1, ADDRINT returnIp) {
-  DatastructInfo info;
+  Datastruct info;
 
   // Call the relocated entry point of the original (replaced) routine.
   info.address = orgFuncptr(arg0, arg1);
@@ -59,7 +59,7 @@ VOID *NewCalloc(fp_calloc orgFuncptr, UINT64 arg0, UINT64 arg1, ADDRINT returnIp
   PIN_UnlockClient();
 
   if (info.file_name.length() > 0) {
-    register_datastruct(info);
+    Datastruct::register_datastruct(info);
   }
 
   return info.address;
@@ -69,7 +69,7 @@ VOID *NewCalloc(fp_calloc orgFuncptr, UINT64 arg0, UINT64 arg1, ADDRINT returnIp
 typedef void *(*fp_aligned_alloc)(size_t, size_t);
 
 VOID *NewAlignedAlloc(fp_aligned_alloc orgFuncptr, UINT64 arg0, UINT64 arg1, ADDRINT returnIp) {
-  DatastructInfo info;
+  Datastruct info;
 
   // Call the relocated entry point of the original (replaced) routine.
   VOID *ret = orgFuncptr(arg0, arg1);
@@ -84,7 +84,7 @@ VOID *NewAlignedAlloc(fp_aligned_alloc orgFuncptr, UINT64 arg0, UINT64 arg1, ADD
   PIN_UnlockClient();
 
   if (info.file_name.length() > 0) {
-    register_datastruct(info);
+    Datastruct::register_datastruct(info);
     // info.print();
   }
 
@@ -95,7 +95,7 @@ typedef int (*fp_posix_memalign)(void **, size_t, size_t);
 
 INT32 NewPosixMemalign(fp_posix_memalign orgFuncptr, VOID **memptr, UINT64 arg0, UINT64 arg1,
                        ADDRINT returnIp) {
-  DatastructInfo info;
+  Datastruct info;
 
   // printf("arg0: %lu arg1: %lu *memptr: %p\n", arg0, arg1, *memptr);
   // printf("arg0: %lu arg1: %lu *memptr: %p\n", arg0, arg1, *memptr);
@@ -113,7 +113,7 @@ INT32 NewPosixMemalign(fp_posix_memalign orgFuncptr, VOID **memptr, UINT64 arg0,
   PIN_UnlockClient();
 
   if (info.file_name.length() > 0) {
-    register_datastruct(info);
+    Datastruct::Datastruct::register_datastruct(info);
     // info.print();
   }
 

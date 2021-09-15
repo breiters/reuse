@@ -4,8 +4,9 @@
 #include <vector>
 
 enum DATASTRUCTS { RD_NO_DATASTRUCT = -1 };
+typedef void *Addr;
 
-class DatastructInfo {
+class Datastruct {
 public:
   void *address;
   size_t nbytes;
@@ -15,6 +16,7 @@ public:
   // bool is_active;
   std::string allocator;
   std::string file_name;
+  // std::vector<int> contained_in;
 
   /*
     inline void print(void) {
@@ -27,14 +29,14 @@ public:
     }
   */
 
+  static std::vector<Datastruct> datastructs;
+  static std::vector<std::vector<int>> contained_indices;
+
   inline void print(void) {}
 
-private:
-};
+  static int datastruct_num(Addr addr);
+  static void register_datastruct(Datastruct &ds);
 
-typedef void *Addr;
-extern void register_datastruct(DatastructInfo &info);
-extern int datastruct_num(Addr addr);
-extern std::vector<int> datstruct_nums(Addr addr);
-extern std::vector<DatastructInfo> g_datastructs;
-extern std::vector<std::vector<int>> g_indices_of_ds;
+private:
+  static void combine(int ds_num, [[maybe_unused]] int level);
+};

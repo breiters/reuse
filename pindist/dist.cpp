@@ -58,47 +58,48 @@ template <> struct hash<S> {
 // each memory block can be contained in multiple stacks
 // so we need to store the iterators to memory block in each stack
 struct IteratorContainer {
-  IteratorContainer(StackIterator, StackIterator, vector<StackIterator>);
+  IteratorContainer(StackIterator, vector<StackIterator>);
   IteratorContainer();
   StackIterator global_iterator;
-  StackIterator ds_iterator;
-  vector<StackIterator> combine_iterators;
+  vector<StackIterator> iterators;
 };
 
 IteratorContainer::IteratorContainer() {}
-IteratorContainer::IteratorContainer(StackIterator g, StackIterator ds, vector<StackIterator> cds)
-    : global_iterator{g}, ds_iterator{ds}, combine_iterators{cds} {};
+IteratorContainer::IteratorContainer(StackIterator g, vector<StackIterator> cds)
+    : global_iterator{g}, iterators{cds} {};
 
 // map with custom hash function:
 using AddrMap = std::unordered_map<Addr, IteratorContainer, std::hash<S>>;
-// using addr_map = std::unordered_map<Addr, IteratorContainer>;
+// using AddrMap = std::unordered_map<Addr, IteratorContainer>;
 AddrMap g_addrMap;
 
+#define RD_DATASTRUCTS 0
+
 static void on_accessed_before() {
+  // puts(__func__);
   // for all caches where ds_num is included:
   // increment bucket 0 access count
   // and bucket 0 exclusive access count
-  //
-  int ds_num = g_cachesim.stack().begin()->ds_num;
 
   // global cache
-  g_cachesim.incr_access(0);
+  CacheSim::cachesims[0].incr_access(0);
 
+#if RD_DATASTRUCTS
+  int ds_num = CacheSim::cachesims[0].stack().begin()->ds_num;
   if (ds_num != RD_NO_DATASTRUCT) {
-    // single datastruct
-    g_cachesims[ds_num].incr_access(0);
-    g_cachesims[ds_num].incr_access_excl(0);
-
-    // combined datastructs
-    for (int idx : Datastruct::contained_indices[ds_num]) {
-      g_cachesims_combined[idx].incr_access(0);
-      g_cachesims_combined[idx].incr_access_excl(0);
+    for (int idx : Datastruct::indices_of[ds_num]) {
+      assert(idx != 0);
+      assert(CacheSim::cachesims[idx].contains(ds_num));
+      CacheSim::cachesims[idx].incr_access(0);
+      CacheSim::cachesims[idx].incr_access_excl(0);
     }
   }
+#endif /* RD_DATASTRUCTS */
 }
 
 // new memory block
 static void on_block_new(Addr addr) {
+  // puts(__func__);
   // memory block not seen yet
   //
   // for all caches where ds_num is included:
@@ -112,22 +113,21 @@ static void on_block_new(Addr addr) {
   MemoryBlock mb = MemoryBlock{addr, ds_num};
 
   IteratorContainer ic{};
-  ic.global_iterator = g_cachesim.on_block_new(mb);
-  g_cachesim.incr_access_inf();
+  ic.global_iterator = CacheSim::cachesims[0].on_block_new(mb);
+  CacheSim::cachesims[0].incr_access_inf();
 
+#if RD_DATASTRUCTS
   if (ds_num != RD_NO_DATASTRUCT) {
-    ic.ds_iterator = g_cachesims[ds_num].on_block_new(mb);
-    g_cachesims[ds_num].incr_access_inf();
-    g_cachesims[ds_num].incr_access_excl_inf();
-
     // account for access to combined dastructs
-    for (int idx : Datastruct::contained_indices[ds_num]) {
-      assert(g_cachesims_combined[idx].contains(ds_num));
-      ic.combine_iterators.push_back(g_cachesims_combined[idx].on_block_new(mb));
-      g_cachesims_combined[idx].incr_access_inf();
-      g_cachesims_combined[idx].incr_access_excl_inf();
+    for (int idx : Datastruct::indices_of[ds_num]) {
+      assert(idx != 0);
+      assert(CacheSim::cachesims[idx].contains(ds_num));
+      ic.iterators.push_back(CacheSim::cachesims[idx].on_block_new(mb));
+      CacheSim::cachesims[idx].incr_access_inf();
+      CacheSim::cachesims[idx].incr_access_excl_inf();
     }
   }
+#endif /* RD_DATASTRUCTS */
 
   // add new iterator container to map
   g_addrMap[addr] = ic;
@@ -143,34 +143,38 @@ static void on_block_new(Addr addr) {
 }
 
 static void on_block_seen(AddrMap::iterator it) {
+  puts(__func__);
   // memory block already seen - get iterators in stacks
   auto iterators = it->second;
 
-  int global_bucket = g_cachesim.on_block_seen(iterators.global_iterator);
-  g_cachesim.incr_access(global_bucket);
+  int global_bucket = CacheSim::cachesims[0].on_block_seen(iterators.global_iterator);
+  CacheSim::cachesims[0].incr_access(global_bucket);
 
+#if RD_DATASTRUCTS
   int ds_num = iterators.global_iterator->ds_num;
-
   if (ds_num != RD_NO_DATASTRUCT) {
-    int ds_bucket = g_cachesims[ds_num].on_block_seen(iterators.ds_iterator);
-    g_cachesims[ds_num].incr_access(global_bucket);
-    g_cachesims[ds_num].incr_access_excl(ds_bucket);
-
-    int m = 0;
-    for (int idx : Datastruct::contained_indices[ds_num]) {
-      assert(g_cachesims_combined[idx].contains(ds_num));
-      int csc_bucket = g_cachesims_combined[idx].on_block_seen(iterators.combine_iterators[m]);
-      g_cachesims_combined[idx].incr_access(global_bucket);
-      g_cachesims_combined[idx].incr_access_excl(csc_bucket);
-      m++;
+    int it_idx = 0;
+    for (int idx : Datastruct::indices_of[ds_num]) {
+      assert(idx != 0);
+      assert(CacheSim::cachesims[idx].contains(ds_num));
+      assert(iterators.iterators.size() == Datastruct::indices_of[ds_num].size());
+      printf("idx: %d\n", idx);
+      int csc_bucket = CacheSim::cachesims[idx].on_block_seen(iterators.iterators[it_idx]);
+      CacheSim::cachesims[idx].incr_access(global_bucket);
+      CacheSim::cachesims[idx].incr_access_excl(csc_bucket);
+      it_idx++;
     }
   }
+#endif /* RD_DATASTRUCTS */
+  puts(__func__);
+  puts("exit");
 }
 
 void RD_accessBlock(Addr addr) {
   [[maybe_unused]] static Addr addr_last;
 
   if (addr == addr_last) {
+    assert(CacheSim::cachesims[0].stack().begin() == g_addrMap.find(addr)->second.global_iterator);
     on_accessed_before();
   } else {
     auto it = g_addrMap.find(addr);
@@ -206,13 +210,7 @@ void RD_print_csv() {
   FILE *csv_out = fopen(csv_filename, "w");
   fprintf(csv_out, "%s", csv_header);
 
-  g_cachesim.print_csv(csv_out, "main");
-
-  for (auto &cs : g_cachesims) {
-    cs.print_csv(csv_out, "main");
-  }
-
-  for (auto &cs : g_cachesims_combined) {
+  for (auto &cs : CacheSim::cachesims) {
     cs.print_csv(csv_out, "main");
   }
 
@@ -231,7 +229,7 @@ void RD_print_csv() {
 void RD_init() {
   g_addrMap.clear();
   // global cache
-  g_cachesim = CacheSim{RD_NO_DATASTRUCT};
+  CacheSim::cachesims.push_back(CacheSim{});
 }
 
 // get statistics
@@ -240,7 +238,7 @@ void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
     RD_checkConsistency();
 
   unsigned long aCount = 0;
-  for (const Bucket &b : g_cachesim.buckets())
+  for (const Bucket &b : CacheSim::cachesims[0].buckets())
     aCount += b.aCount;
 
   stack_size = g_addrMap.size();
@@ -253,10 +251,10 @@ void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
 int RD_get_hist(unsigned int b, unsigned int &min, unsigned long &accessCount) {
   // if (RD_DEBUG) RD_checkConsistency();
 
-  assert((b >= 0) && (b < g_cachesim.buckets().size()));
+  assert((b >= 0) && (b < CacheSim::cachesims[0].buckets().size()));
   min = Bucket::mins[b];
-  accessCount = g_cachesim.buckets()[b].aCount;
-  if (b == g_cachesim.buckets().size() - 1)
+  accessCount = CacheSim::cachesims[0].buckets()[b].aCount;
+  if (b == CacheSim::cachesims[0].buckets().size() - 1)
     return 0;
   return b + 1;
 }

@@ -5,13 +5,12 @@
 #include <algorithm>
 #include <cassert>
 
-CacheSim g_cachesim;
-std::vector<CacheSim> g_cachesims;
-std::vector<CacheSim> g_cachesims_combined;
+std::vector<CacheSim> CacheSim::cachesims;
 
-CacheSim::CacheSim() {}
-
-CacheSim::CacheSim(int ds_num) : next_bucket_{1}, ds_num_{ds_num}, buckets_{std::vector<Bucket>{Bucket::mins.size()}} {}
+CacheSim::CacheSim()
+    : next_bucket_{1}, cs_num_{static_cast<int>(cachesims.size())}, buckets_{std::vector<Bucket>{Bucket::mins.size()}} {
+      printf("add cs: %d\n", cs_num_);
+}
 
 void CacheSim::on_next_bucket_gets_active() {
   // set new buckets marker to end of stack first then set marker to last stack element
@@ -19,7 +18,8 @@ void CacheSim::on_next_bucket_gets_active() {
 
   --(buckets_[next_bucket_].marker);
 
-#if RD_DEBUG
+// #if RD_DEBUG
+#if 1
   StackIterator it = stack_.begin();
   for (unsigned i = 0; i < Bucket::mins[next_bucket_]; i++)
     it++;
@@ -41,7 +41,7 @@ void CacheSim::on_next_bucket_gets_active() {
  * @param mb The to memory block.
  * @return list<MemoryBlock>::iterator The stack begin iterator.
  */
-const StackIterator CacheSim::on_block_new(MemoryBlock &mb) {
+const StackIterator CacheSim::on_block_new(MemoryBlock mb) {
   stack_.push_front(mb);
 
   // move markers upwards after inserting new block on stack
@@ -64,14 +64,14 @@ int CacheSim::on_block_seen(const StackIterator &blockIt) {
   if (blockIt == stack_.begin()) {
     return 0;
   }
-
+  puts("1");
   // move all markers below current memory blocks bucket
   int bucket = blockIt->bucket;
   move_markers(bucket);
-
+puts("2");
   // put current memory block on top of stack
   stack_.splice(stack_.begin(), stack_, blockIt);
-
+puts("3");
   // bucket of blockIt is zero now because it is on top of stack
   blockIt->bucket = 0;
 
@@ -85,14 +85,17 @@ void CacheSim::move_markers(int topBucket) {
     // decrement marker so it stays always on same distance to stack begin
     --buckets_[b].marker;
 
-#if DEBUG_LEVEL > 1
-    // sanity check for bucket distance to stack begin, but takes too long
+// #if RD_DEBUG > 1
+#if 1
+    // sanity check for bucket distance to stack begin (expensive)
     unsigned distance = 0;
     for (auto it = stack_.begin(); it != buckets_[b].marker; it++) {
       distance++;
     }
-    // printf("distance: %d\n", distance);
-    assert(distance == buckets_[b].min);
+    printf("distance: %d\n", distance);
+    printf("bucketmins: %d\n", Bucket::mins[b]);
+    printf("b: %d\n", b);
+    assert(distance == Bucket::mins[b]);
 #endif
 
     // increment bucket of memory block where current marker points to
@@ -120,15 +123,15 @@ void CacheSim::print_csv(FILE *csv_out, const char *region) const { print_csv(cs
 void CacheSim::print_csv(FILE *csv_out, const char *region, const std::vector<Bucket> &buckets) const {
   // is single datastruct or global address space accesses
   if (ds_nums_.size() == 0)
-    if (ds_num_ == RD_NO_DATASTRUCT) {
+    if (cs_num_ == RD_NO_DATASTRUCT) {
       for (size_t b = 0; b < buckets.size(); b++) {
-        fprintf(csv_out, CSV_FORMAT, region, ds_num_, (void *)0x0, 0UL, 0, 0UL, "main file", Bucket::mins[b],
+        fprintf(csv_out, CSV_FORMAT, region, cs_num_, (void *)0x0, 0UL, 0, 0UL, "main file", Bucket::mins[b],
                 buckets[b].aCount, buckets[b].aCount_excl);
       }
     } else {
-      auto &ds = Datastruct::datastructs[ds_num_];
+      auto &ds = Datastruct::datastructs[cs_num_];
       for (size_t b = 0; b < buckets.size(); b++) {
-        fprintf(csv_out, CSV_FORMAT, region, ds_num_, ds.address, ds.nbytes, ds.line, ds.access_count,
+        fprintf(csv_out, CSV_FORMAT, region, cs_num_, ds.address, ds.nbytes, ds.line, ds.access_count,
                 ds.file_name.c_str(), Bucket::mins[b], buckets[b].aCount, buckets[b].aCount_excl);
       }
     }

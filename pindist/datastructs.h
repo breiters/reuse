@@ -30,7 +30,7 @@ public:
   */
 
   static std::vector<Datastruct> datastructs;
-  static std::vector<std::vector<int>> contained_indices;
+  static std::vector<std::vector<int>> indices_of;
 
   inline void print(void) {}
 

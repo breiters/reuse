@@ -10,14 +10,9 @@
 class Region {
 public:
   char *region_;
-  std::vector<Bucket> global_buckets_;
-  std::vector<Bucket> global_buckets_entry_;
 
   std::vector<std::vector<Bucket>> buckets_;
   std::vector<std::vector<Bucket>> buckets_entry_;
-
-  // std::unordered_map<CacheSim, std::vector<Bucket>> region_buckets_;
-  // std::unordered_map<CacheSim, std::vector<Bucket>> region_buckets_on_entry_;
 
   Region(char *region);
   ~Region();
@@ -30,6 +25,5 @@ public:
 private:
 };
 
-// TODO: should use some smart pointer here but PIN stl port does not really
-// provide it... ?!
+// should use unique_ptr here but PIN stl port does not really provide it.
 extern std::unordered_map<char *, Region *> g_regions;

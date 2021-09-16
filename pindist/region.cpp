@@ -12,7 +12,7 @@ std::unordered_map<char *, Region *> g_regions;
 Region::Region(char *region) : region_{strdup(region)} {
   // add region buckets for every CacheSim
   // init with zero
-  size_t num_cachesims = CacheSim::cachesims.size();
+  size_t num_cachesims = g_cachesims.size();
 
   buckets_.reserve(num_cachesims);
   buckets_entry_.reserve(num_cachesims);
@@ -33,8 +33,8 @@ void Region::on_region_entry() {
   // std::cout << "entry region: " << region_ << "\n";
   // make snapshot of current buckets access counts
   size_t cs_num = 0;
-  for (auto &cs : CacheSim::cachesims) {
-    buckets_entry_[cs_num] = cs.buckets();
+  for (auto &cs : g_cachesims) {
+    buckets_entry_[cs_num] = cs->buckets();
     cs_num++;
   }
 }
@@ -42,9 +42,9 @@ void Region::on_region_entry() {
 void Region::on_region_exit() {
   // std::cout << "exit region: " << region_ << "\n";
   size_t cs_num = 0;
-  for (auto &cs : CacheSim::cachesims) {
+  for (auto &cs : g_cachesims) {
     size_t b = 0;
-    for (auto &bucket : cs.buckets()) {
+    for (auto &bucket : cs->buckets()) {
       buckets_[cs_num][b].add_sub(bucket, buckets_entry_[cs_num][b]);
       b++;
     }
@@ -74,8 +74,8 @@ void Region::demangle_name() {
 void Region::print_csv(FILE *csv_out) {
   demangle_name();
   size_t cs_num = 0;
-  for (auto &cs : CacheSim::cachesims) {
-    cs.print_csv(csv_out, region_, buckets_[cs_num]);
+  for (auto &cs : g_cachesims) {
+    cs->print_csv(csv_out, region_, buckets_[cs_num]);
     cs_num++;
   }
 }

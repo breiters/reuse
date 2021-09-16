@@ -65,24 +65,23 @@ template <> struct hash<S> {
 using AddrMap = std::unordered_map<Addr, vector<StackIterator>>;
 AddrMap g_addrMap;
 
-#define RD_DATASTRUCTS 0
-
 static void on_accessed_before() {
   // for all caches where ds_num is included:
   // increment bucket 0 access count
   // and bucket 0 exclusive access count
 
   // global cache
-  CacheSim::cachesims[0].incr_access(0);
+  g_cachesims[0]->incr_access(0);
 
 #if RD_DATASTRUCTS
-  int ds_num = CacheSim::cachesims[0].stack().begin()->ds_num;
+  // int ds_num = g_cachesims[0]->stack().begin()->ds_num;
+  int ds_num = g_cachesims[0]->stack_begin()->ds_num;
   if (ds_num != RD_NO_DATASTRUCT) {
     for (int idx : Datastruct::indices_of[ds_num]) {
       assert(idx != 0);
-      assert(CacheSim::cachesims[idx].contains(ds_num));
-      CacheSim::cachesims[idx].incr_access(0);
-      CacheSim::cachesims[idx].incr_access_excl(0);
+      assert(g_cachesims[idx]->contains(ds_num));
+      g_cachesims[idx]->incr_access(0);
+      g_cachesims[idx]->incr_access_excl(0);
     }
   }
 #endif /* RD_DATASTRUCTS */
@@ -91,7 +90,7 @@ static void on_accessed_before() {
 // new memory block
 static void on_block_new(Addr addr) {
   eprintf( "%s\n", __func__);
-  // CacheSim::cachesims[0].print_stack();
+  // g_cachesims[0]->print_stack();
 
   // memory block not seen yet
   //
@@ -105,28 +104,33 @@ static void on_block_new(Addr addr) {
   int ds_num = Datastruct::datastruct_num(addr);
   MemoryBlock mb = MemoryBlock{addr, ds_num};
 
-  vector<StackIterator> iters;
-  CacheSim::cachesims[0].on_block_new(mb);
+  vector<StackIterator> iterators;
+  g_cachesims[0]->on_block_new(mb);
 
-  StackIterator it = CacheSim::cachesims[0].stack_.begin();
-  iters.push_back(it);
-  CacheSim::cachesims[0].incr_access_inf();
+  // StackIterator it = g_cachesims[0]->stack_.begin();
+  StackIterator it = g_cachesims[0]->stack_begin();
+  iterators.push_back(it);
+  g_cachesims[0]->incr_access_inf();
+
+  eprintf( "restored iterator: ");
+  // iterators[0]->print();
+  mb.print();
 
 #if RD_DATASTRUCTS
   if (ds_num != RD_NO_DATASTRUCT) {
     // account for access to combined dastructs
     for (int idx : Datastruct::indices_of[ds_num]) {
       assert(idx != 0);
-      assert(CacheSim::cachesims[idx].contains(ds_num));
-      ic.iterators.push_back(CacheSim::cachesims[idx].on_block_new(mb));
-      CacheSim::cachesims[idx].incr_access_inf();
-      CacheSim::cachesims[idx].incr_access_excl_inf();
+      assert(g_cachesims[idx]->contains(ds_num));
+      iterators.push_back(g_cachesims[idx]->on_block_new(mb));
+      g_cachesims[idx]->incr_access_inf();
+      g_cachesims[idx]->incr_access_excl_inf();
     }
   }
 #endif /* RD_DATASTRUCTS */
 
   // add new iterator container to map
-  g_addrMap[addr] = iters;
+  g_addrMap[addr] = iterators;
 
 #if USE_OLD_CODE
   if (RD_VERBOSE > 1)
@@ -145,23 +149,23 @@ static void on_block_seen(AddrMap::iterator &it) {
   eprintf( "restored iterator: ");
   iterators[0]->print();
 
-  // CacheSim::cachesims[0].print_stack();
+  // g_cachesims[0]->print_stack();
 
-  int global_bucket = CacheSim::cachesims[0].on_block_seen(iterators[0]);
-  CacheSim::cachesims[0].incr_access(global_bucket);
+  int global_bucket = g_cachesims[0]->on_block_seen(iterators[0]);
+  g_cachesims[0]->incr_access(global_bucket);
 
 #if RD_DATASTRUCTS
-  int ds_num = iterators.global_iterator->ds_num;
+  int ds_num = iterators[0]->ds_num;
   if (ds_num != RD_NO_DATASTRUCT) {
-    int it_idx = 0;
+    int it_idx = 1; // iterator 0 is for global stack
     for (int idx : Datastruct::indices_of[ds_num]) {
       assert(idx != 0);
-      assert(CacheSim::cachesims[idx].contains(ds_num));
-      assert(iterators.iterators.size() == Datastruct::indices_of[ds_num].size());
+      assert(g_cachesims[idx]->contains(ds_num));
+      assert(iterators.size() == Datastruct::indices_of[ds_num].size() + 1);
       printf("idx: %d\n", idx);
-      int csc_bucket = CacheSim::cachesims[idx].on_block_seen(iterators.iterators[it_idx]);
-      CacheSim::cachesims[idx].incr_access(global_bucket);
-      CacheSim::cachesims[idx].incr_access_excl(csc_bucket);
+      int csc_bucket = g_cachesims[idx]->on_block_seen(iterators[it_idx]);
+      g_cachesims[idx]->incr_access(global_bucket);
+      g_cachesims[idx]->incr_access_excl(csc_bucket);
       it_idx++;
     }
   }
@@ -169,13 +173,14 @@ static void on_block_seen(AddrMap::iterator &it) {
 }
 
 void RD_accessBlock(Addr addr) {
+  eprintf( "%s\n", __func__);
   [[maybe_unused]] static Addr addr_last;
 
   DEBUG_VAR(addr)
 
-  // if (addr == addr_last) {
-  if (0) {
-    // assert(CacheSim::cachesims[0].stack().begin() == g_addrMap.find(addr)->second.global_iterator);
+  if (addr == addr_last) {
+  // if (0) {
+    // assert(g_cachesim.stack().begin() == g_addrMap.find(addr)->second.global_iterator);
     on_accessed_before();
   } else {
     auto it = g_addrMap.find(addr);
@@ -213,10 +218,10 @@ void RD_print_csv() {
   FILE *csv_out = fopen(csv_filename, "w");
   fprintf(csv_out, "%s", csv_header);
 
-  for (auto &cs : CacheSim::cachesims) {
-    cs.print_csv(csv_out, "main");
+  for (auto &cs : g_cachesims) {
+    cs->print_csv(csv_out, "main");
   }
-#if 0
+#if RD_REGIONS
   for (const auto &region : g_regions) {
     region.second->print_csv(csv_out);
   }
@@ -232,7 +237,7 @@ void RD_print_csv() {
 void RD_init() {
   g_addrMap.clear();
   // global cache
-  CacheSim::cachesims.push_back(CacheSim{});
+  g_cachesims.push_back(new CacheSim{});
 }
 
 // get statistics
@@ -241,7 +246,7 @@ void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
     // RD_checkConsistency();
 
   unsigned long aCount = 0;
-  for (const Bucket &b : CacheSim::cachesims[0].buckets())
+  for (const Bucket &b : g_cachesims[0]->buckets())
     aCount += b.aCount;
 
   stack_size = g_addrMap.size();
@@ -254,10 +259,10 @@ void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
 int RD_get_hist(unsigned int b, unsigned int &min, unsigned long &accessCount) {
   // if (RD_DEBUG) RD_checkConsistency();
 
-  assert((b >= 0) && (b < CacheSim::cachesims[0].buckets().size()));
+  assert((b >= 0) && (b < g_cachesims[0]->buckets().size()));
   min = Bucket::mins[b];
-  accessCount = CacheSim::cachesims[0].buckets()[b].aCount;
-  if (b == CacheSim::cachesims[0].buckets().size() - 1)
+  accessCount = g_cachesims[0]->buckets()[b].aCount;
+  if (b == g_cachesims[0]->buckets().size() - 1)
     return 0;
   return b + 1;
 }

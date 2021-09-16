@@ -20,15 +20,15 @@ std::vector<Datastruct> Datastruct::datastructs;
 
   int ds_idx_other = 0;
   for ([[maybe_unused]] auto &ds : Datastruct::datastructs) {
-    CacheSim::cachesims.push_back(CacheSim{});
+    g_cachesims.push_back(new CacheSim{});
 
-    int cs_idx = static_cast<int>(CacheSim::cachesims.size() - 1);
-    // int cs_idx = static_cast<int>(CacheSim::cachesims.size());
+    int cs_idx = static_cast<int>(g_cachesims.size() - 1);
+    // int cs_idx = static_cast<int>(g_cachesims.size());
     indices_of[ds_idx].push_back(cs_idx);
     indices_of[ds_idx_other].push_back(cs_idx);
 
-    CacheSim::cachesims.back().add_datastruct(ds_idx);
-    CacheSim::cachesims.back().add_datastruct(ds_idx_other);
+    g_cachesims.back()->add_datastruct(ds_idx);
+    g_cachesims.back()->add_datastruct(ds_idx_other);
 
     for (auto &key_value : g_regions) {
       key_value.second->register_datastruct();
@@ -42,10 +42,14 @@ void Datastruct::register_datastruct(Datastruct &info) {
   Datastruct::datastructs.push_back(info);
   [[maybe_unused]] int ds_idx = static_cast<int>(Datastruct::datastructs.size() - 1);
 
-  CacheSim::cachesims.push_back(CacheSim{});
-  [[maybe_unused]] int cs_idx = static_cast<int>(CacheSim::cachesims.size() - 1);
-
 #if RD_DATASTRUCTS
+  g_cachesims.push_back(new CacheSim{});
+  g_cachesims.back()->add_datastruct(ds_idx);
+  [[maybe_unused]] int cs_idx = static_cast<int>(g_cachesims.size() - 1);
+  assert(cs_idx != 0);
+
+  eprintf("new datastruct\n");
+
   indices_of.push_back(std::vector<int>{});
   indices_of[ds_idx].push_back(cs_idx);
 

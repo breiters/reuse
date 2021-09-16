@@ -7,21 +7,33 @@
 
 #include "debug.h"
 
-std::vector<CacheSim> CacheSim::cachesims;
+// std::vector<CacheSim> CacheSim::cachesims;
+// CacheSim g_cachesim;
+// std::vector<CacheSim> g_cachesims;
+// std::vector<CacheSim> g_cachesims;
+
+/**
+ * can NOT use std::vector<CacheSim> here because PIN stl somehow invalidates the list iterators of existing elements
+ * when pushing new CacheSim
+ */
+
+std::vector<CacheSim *> g_cachesims; // LRU stack objects
+
+// size_t CacheSim::num_cs;
 
 CacheSim::CacheSim()
-    : next_bucket_{1}, cs_num_{static_cast<int>(cachesims.size())}, buckets_{std::vector<Bucket>{Bucket::mins.size()}} {
-  /*
-  for (auto &b : buckets_) {
-    b.marker = stack_.end();
-  }
-  */
+    : next_bucket_{1}, cs_num_{static_cast<int>(g_cachesims.size())}, buckets_{
+                                                                          std::vector<Bucket>{Bucket::mins.size()}} {
+
+  // num_cs++;
+
   eprintf("add new cache simulator - num : %d\n", cs_num_);
 }
 
 void CacheSim::on_next_bucket_gets_active() {
   // eprintf("\n%s\n", __func__);
   // print_stack();
+  // assert(buckets_[next_bucket_].marker == stack_.end());
 
   // set new buckets marker to end of stack first then set marker to last stack element
   buckets_[next_bucket_].marker = stack_.end();
@@ -57,7 +69,7 @@ void CacheSim::on_next_bucket_gets_active() {
  * @param mb The to memory block.
  * @return The stack begin iterator
  */
-const StackIterator CacheSim::on_block_new(MemoryBlock mb) {
+StackIterator CacheSim::on_block_new(MemoryBlock mb) {
   // eprintf("\n%s\n", __func__);
   // eprintf("adding: ");
   // mb.print();
@@ -80,12 +92,12 @@ const StackIterator CacheSim::on_block_new(MemoryBlock mb) {
  *
  * @param blockIt
  */
-int CacheSim::on_block_seen(const StackIterator &blockIt) {
+int CacheSim::on_block_seen(StackIterator blockIt) {
   eprintf("\n%s\n", __func__);
   // print_stack();
   // if already on top of stack: do nothing (bucket is zero anyway)
   if (blockIt == stack_.begin()) {
-    eprintf("is on top?: ");
+    eprintf("on top?: ");
     blockIt->print();
     return 0;
   }
@@ -96,6 +108,8 @@ int CacheSim::on_block_seen(const StackIterator &blockIt) {
   // move all markers below current memory blocks bucket
   int bucket = blockIt->bucket;
   eprintf("bucket: %d\n", bucket);
+
+  print_stack();
 
   move_markers2(bucket);
 
@@ -124,11 +138,9 @@ void CacheSim::move_markers2(int topBucket) {
     // sanity check for bucket distance to stack begin (expensive)
     unsigned distance = 0;
     for (auto it = stack_.begin(); it != buckets_[b].marker; it++) {
+      assert(it != stack_.end());
       distance++;
     }
-    // eprintf("distance: %d\n", distance);
-    // eprintf("bucketmins: %d\n", Bucket::mins[b]);
-    // eprintf("b: %d\n", b);
     assert(distance == Bucket::mins[b] - 1);
 #endif
 
@@ -151,6 +163,7 @@ void CacheSim::move_markers(int topBucket) {
     // sanity check for bucket distance to stack begin (expensive)
     unsigned distance = 0;
     for (auto it = stack_.begin(); it != buckets_[b].marker; it++) {
+      assert(it != stack_.end());
       distance++;
     }
     // printf("distance: %d\n", distance);
@@ -185,13 +198,13 @@ void CacheSim::print_csv(FILE *csv_out, const char *region, const std::vector<Bu
   // is single datastruct or global address space accesses
   if (ds_nums_.size() == 0) {
     if (cs_num_ == 0) {
-    // if (cs_num_ == RD_NO_DATASTRUCT) {
+      // if (cs_num_ == RD_NO_DATASTRUCT) {
       for (size_t b = 0; b < buckets.size(); b++) {
         fprintf(csv_out, CSV_FORMAT, region, cs_num_, (void *)0x0, 0UL, 0, 0UL, "main file", Bucket::mins[b],
                 buckets[b].aCount, buckets[b].aCount_excl);
       }
     } else {
-  puts("1");
+      puts("1");
       auto &ds = Datastruct::datastructs[cs_num_];
       for (size_t b = 0; b < buckets.size(); b++) {
         fprintf(csv_out, CSV_FORMAT, region, cs_num_, ds.address, ds.nbytes, ds.line, ds.access_count,

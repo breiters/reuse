@@ -40,11 +40,12 @@ std::vector<Datastruct> Datastruct::datastructs;
 
 void Datastruct::register_datastruct(Datastruct &info) {
   Datastruct::datastructs.push_back(info);
-  int ds_idx = static_cast<int>(Datastruct::datastructs.size() - 1);
+  [[maybe_unused]] int ds_idx = static_cast<int>(Datastruct::datastructs.size() - 1);
 
   CacheSim::cachesims.push_back(CacheSim{});
-  int cs_idx = static_cast<int>(CacheSim::cachesims.size() - 1);
+  [[maybe_unused]] int cs_idx = static_cast<int>(CacheSim::cachesims.size() - 1);
 
+#if RD_DATASTRUCTS
   indices_of.push_back(std::vector<int>{});
   indices_of[ds_idx].push_back(cs_idx);
 
@@ -52,7 +53,11 @@ void Datastruct::register_datastruct(Datastruct &info) {
     key_value.second->register_datastruct();
   }
 
-  // combine(ds_idx, 1);
+#if RD_COMBINED_DATASTRUCTS
+  combine(ds_idx, 1);
+#endif /* RD_COMBINED_DATASTRUCTS */
+
+#endif /* RD_DATASTRUCTS */
 }
 
 /** TODO: maybe use better algorithm to get datastruct **/

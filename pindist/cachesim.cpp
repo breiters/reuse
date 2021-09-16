@@ -5,18 +5,34 @@
 #include <algorithm>
 #include <cassert>
 
+#include "debug.h"
+
 std::vector<CacheSim> CacheSim::cachesims;
 
 CacheSim::CacheSim()
     : next_bucket_{1}, cs_num_{static_cast<int>(cachesims.size())}, buckets_{std::vector<Bucket>{Bucket::mins.size()}} {
-      printf("add cs: %d\n", cs_num_);
+  /*
+  for (auto &b : buckets_) {
+    b.marker = stack_.end();
+  }
+  */
+  eprintf("add new cache simulator - num : %d\n", cs_num_);
 }
 
 void CacheSim::on_next_bucket_gets_active() {
+  // eprintf("\n%s\n", __func__);
+  // print_stack();
+
   // set new buckets marker to end of stack first then set marker to last stack element
   buckets_[next_bucket_].marker = stack_.end();
 
+  // eprintf("stack end:\n");
+  // buckets_[next_bucket_].marker->print();
+
   --(buckets_[next_bucket_].marker);
+
+  // eprintf("marker now on:");
+  // buckets_[next_bucket_].marker->print();
 
 // #if RD_DEBUG
 #if 1
@@ -39,16 +55,21 @@ void CacheSim::on_next_bucket_gets_active() {
  * Adds next bucket if necessary.
  *
  * @param mb The to memory block.
- * @return list<MemoryBlock>::iterator The stack begin iterator.
+ * @return The stack begin iterator
  */
 const StackIterator CacheSim::on_block_new(MemoryBlock mb) {
+  // eprintf("\n%s\n", __func__);
+  // eprintf("adding: ");
+  // mb.print();
   stack_.push_front(mb);
+
+  // print_stack();
 
   // move markers upwards after inserting new block on stack
   move_markers(next_bucket_ - 1);
 
   // does another bucket get active?
-  if (!Bucket::mins[next_bucket_] == BUCKET_INF_DIST && stack_.size() > Bucket::mins[next_bucket_]) {
+  if (Bucket::mins[next_bucket_] != BUCKET_INF_DIST && (stack_.size() > Bucket::mins[next_bucket_])) {
     on_next_bucket_gets_active();
   }
   return stack_.begin();
@@ -60,41 +81,81 @@ const StackIterator CacheSim::on_block_new(MemoryBlock mb) {
  * @param blockIt
  */
 int CacheSim::on_block_seen(const StackIterator &blockIt) {
+  eprintf("\n%s\n", __func__);
+  // print_stack();
   // if already on top of stack: do nothing (bucket is zero anyway)
   if (blockIt == stack_.begin()) {
+    eprintf("is on top?: ");
+    blockIt->print();
     return 0;
   }
-  puts("1");
+
+  eprintf("block was not on top...\n");
+
+  blockIt->print();
   // move all markers below current memory blocks bucket
   int bucket = blockIt->bucket;
-  move_markers(bucket);
-puts("2");
+  eprintf("bucket: %d\n", bucket);
+
+  move_markers2(bucket);
+
   // put current memory block on top of stack
   stack_.splice(stack_.begin(), stack_, blockIt);
-puts("3");
+
+  eprintf("\nafter splice:");
+  print_stack();
+
   // bucket of blockIt is zero now because it is on top of stack
   blockIt->bucket = 0;
 
   return bucket;
 }
 
-void CacheSim::move_markers(int topBucket) {
+void CacheSim::move_markers2(int topBucket) {
   for (int b = 1; b <= topBucket; b++) {
     assert(buckets_[next_bucket_].marker != stack_.begin());
 
     // decrement marker so it stays always on same distance to stack begin
-    --buckets_[b].marker;
+    --(buckets_[b].marker);
 
-// #if RD_DEBUG > 1
-#if 1
+    // print_stack();
+
+#if RD_DEBUG > 1
     // sanity check for bucket distance to stack begin (expensive)
     unsigned distance = 0;
     for (auto it = stack_.begin(); it != buckets_[b].marker; it++) {
       distance++;
     }
-    printf("distance: %d\n", distance);
-    printf("bucketmins: %d\n", Bucket::mins[b]);
-    printf("b: %d\n", b);
+    // eprintf("distance: %d\n", distance);
+    // eprintf("bucketmins: %d\n", Bucket::mins[b]);
+    // eprintf("b: %d\n", b);
+    assert(distance == Bucket::mins[b] - 1);
+#endif
+
+    // increment bucket of memory block where current marker points to
+    (buckets_[b].marker)->bucket++;
+  }
+}
+
+void CacheSim::move_markers(int topBucket) {
+  // assert(topBucket != next_bucket_ - 1);
+  for (int b = 1; b <= topBucket; b++) {
+    assert(buckets_[next_bucket_].marker != stack_.begin());
+
+    // decrement marker so it stays always on same distance to stack begin
+    --(buckets_[b].marker);
+
+    // print_stack();
+
+#if RD_DEBUG > 1
+    // sanity check for bucket distance to stack begin (expensive)
+    unsigned distance = 0;
+    for (auto it = stack_.begin(); it != buckets_[b].marker; it++) {
+      distance++;
+    }
+    // printf("distance: %d\n", distance);
+    // printf("bucketmins: %d\n", Bucket::mins[b]);
+    // printf("b: %d\n", b);
     assert(distance == Bucket::mins[b]);
 #endif
 
@@ -122,19 +183,22 @@ void CacheSim::print_csv(FILE *csv_out, const char *region) const { print_csv(cs
 
 void CacheSim::print_csv(FILE *csv_out, const char *region, const std::vector<Bucket> &buckets) const {
   // is single datastruct or global address space accesses
-  if (ds_nums_.size() == 0)
-    if (cs_num_ == RD_NO_DATASTRUCT) {
+  if (ds_nums_.size() == 0) {
+    if (cs_num_ == 0) {
+    // if (cs_num_ == RD_NO_DATASTRUCT) {
       for (size_t b = 0; b < buckets.size(); b++) {
         fprintf(csv_out, CSV_FORMAT, region, cs_num_, (void *)0x0, 0UL, 0, 0UL, "main file", Bucket::mins[b],
                 buckets[b].aCount, buckets[b].aCount_excl);
       }
     } else {
+  puts("1");
       auto &ds = Datastruct::datastructs[cs_num_];
       for (size_t b = 0; b < buckets.size(); b++) {
         fprintf(csv_out, CSV_FORMAT, region, cs_num_, ds.address, ds.nbytes, ds.line, ds.access_count,
                 ds.file_name.c_str(), Bucket::mins[b], buckets[b].aCount, buckets[b].aCount_excl);
       }
     }
+  }
   // is combined datastruct access
   else {
     size_t MAX_LEN = 512;

@@ -28,6 +28,8 @@ using std::vector;
 
 extern string g_application_name;
 
+#include "debug.h"
+
 // make sure that memblocks are powers of two
 static constexpr bool is_pow2(int a) { return !(a & (a - 1)); }
 static_assert(is_pow2(MEMBLOCKLEN));
@@ -57,26 +59,15 @@ template <> struct hash<S> {
 
 // each memory block can be contained in multiple stacks
 // so we need to store the iterators to memory block in each stack
-struct IteratorContainer {
-  IteratorContainer(StackIterator, vector<StackIterator>);
-  IteratorContainer();
-  StackIterator global_iterator;
-  vector<StackIterator> iterators;
-};
-
-IteratorContainer::IteratorContainer() {}
-IteratorContainer::IteratorContainer(StackIterator g, vector<StackIterator> cds)
-    : global_iterator{g}, iterators{cds} {};
 
 // map with custom hash function:
-using AddrMap = std::unordered_map<Addr, IteratorContainer, std::hash<S>>;
-// using AddrMap = std::unordered_map<Addr, IteratorContainer>;
+// using AddrMap = std::unordered_map<Addr, vector<StackIterator>, std::hash<S>>;
+using AddrMap = std::unordered_map<Addr, vector<StackIterator>>;
 AddrMap g_addrMap;
 
 #define RD_DATASTRUCTS 0
 
 static void on_accessed_before() {
-  // puts(__func__);
   // for all caches where ds_num is included:
   // increment bucket 0 access count
   // and bucket 0 exclusive access count
@@ -99,7 +90,9 @@ static void on_accessed_before() {
 
 // new memory block
 static void on_block_new(Addr addr) {
-  // puts(__func__);
+  eprintf( "%s\n", __func__);
+  // CacheSim::cachesims[0].print_stack();
+
   // memory block not seen yet
   //
   // for all caches where ds_num is included:
@@ -112,8 +105,11 @@ static void on_block_new(Addr addr) {
   int ds_num = Datastruct::datastruct_num(addr);
   MemoryBlock mb = MemoryBlock{addr, ds_num};
 
-  IteratorContainer ic{};
-  ic.global_iterator = CacheSim::cachesims[0].on_block_new(mb);
+  vector<StackIterator> iters;
+  CacheSim::cachesims[0].on_block_new(mb);
+
+  StackIterator it = CacheSim::cachesims[0].stack_.begin();
+  iters.push_back(it);
   CacheSim::cachesims[0].incr_access_inf();
 
 #if RD_DATASTRUCTS
@@ -130,7 +126,7 @@ static void on_block_new(Addr addr) {
 #endif /* RD_DATASTRUCTS */
 
   // add new iterator container to map
-  g_addrMap[addr] = ic;
+  g_addrMap[addr] = iters;
 
 #if USE_OLD_CODE
   if (RD_VERBOSE > 1)
@@ -142,12 +138,16 @@ static void on_block_new(Addr addr) {
 #endif
 }
 
-static void on_block_seen(AddrMap::iterator it) {
-  puts(__func__);
+static void on_block_seen(AddrMap::iterator &it) {
+  eprintf( "%s\n", __func__);
   // memory block already seen - get iterators in stacks
   auto iterators = it->second;
+  eprintf( "restored iterator: ");
+  iterators[0]->print();
 
-  int global_bucket = CacheSim::cachesims[0].on_block_seen(iterators.global_iterator);
+  // CacheSim::cachesims[0].print_stack();
+
+  int global_bucket = CacheSim::cachesims[0].on_block_seen(iterators[0]);
   CacheSim::cachesims[0].incr_access(global_bucket);
 
 #if RD_DATASTRUCTS
@@ -166,15 +166,16 @@ static void on_block_seen(AddrMap::iterator it) {
     }
   }
 #endif /* RD_DATASTRUCTS */
-  puts(__func__);
-  puts("exit");
 }
 
 void RD_accessBlock(Addr addr) {
   [[maybe_unused]] static Addr addr_last;
 
-  if (addr == addr_last) {
-    assert(CacheSim::cachesims[0].stack().begin() == g_addrMap.find(addr)->second.global_iterator);
+  DEBUG_VAR(addr)
+
+  // if (addr == addr_last) {
+  if (0) {
+    // assert(CacheSim::cachesims[0].stack().begin() == g_addrMap.find(addr)->second.global_iterator);
     on_accessed_before();
   } else {
     auto it = g_addrMap.find(addr);
@@ -187,6 +188,7 @@ void RD_accessBlock(Addr addr) {
 
   addr_last = addr;
 
+#if 0
   if (RD_DEBUG) {
     // run consistency check every 10 million invocations
     static int checkCount = 0;
@@ -196,6 +198,7 @@ void RD_accessBlock(Addr addr) {
       checkCount = 0;
     }
   }
+#endif
 }
 
 void RD_print_csv() {
@@ -213,7 +216,7 @@ void RD_print_csv() {
   for (auto &cs : CacheSim::cachesims) {
     cs.print_csv(csv_out, "main");
   }
-
+#if 0
   for (const auto &region : g_regions) {
     region.second->print_csv(csv_out);
   }
@@ -222,7 +225,7 @@ void RD_print_csv() {
   for (auto &region : g_regions) {
     delete region.second;
   }
-
+#endif
   fclose(csv_out);
 }
 
@@ -234,8 +237,8 @@ void RD_init() {
 
 // get statistics
 void RD_stat(unsigned long &stack_size, unsigned long &accessCount) {
-  if (RD_DEBUG)
-    RD_checkConsistency();
+  // if (RD_DEBUG)
+    // RD_checkConsistency();
 
   unsigned long aCount = 0;
   for (const Bucket &b : CacheSim::cachesims[0].buckets())

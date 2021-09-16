@@ -14,7 +14,7 @@
 #define MEMBLOCK_MASK ~(MEMBLOCKLEN - 1)
 
 // Assertions and consistency check?
-#define RD_DEBUG 0
+// #define RD_DEBUG 0
 
 // 2: Huge amount of debug output, 1: checks, 0: silent
 #define RD_VERBOSE 0

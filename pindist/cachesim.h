@@ -35,14 +35,31 @@ public:
 
   static std::vector<CacheSim> cachesims;
 
-private:
-  int next_bucket_;              //
-  int cs_num_;                   // idx in cachesims
   std::list<MemoryBlock> stack_; // Stack structure with MemoryBlock as element
-  std::vector<Bucket> buckets_;  //
-  std::vector<int> ds_nums_;     // all datastructs that are included
+
+  inline void print_stack() {
+#if RD_DEBUG
+    eprintf("\nstack:\n");
+    for (auto it = stack_.begin(); it != stack_.end(); it++) {
+      it->print();
+      for (auto &m : buckets_) {
+        if (m.marker == it) {
+          eprintf("^~~~ Marker\n");
+        }
+      }
+    }
+    eprintf("\n");
+#endif
+  }
+
+private:
+  int next_bucket_;             //
+  int cs_num_;                  // idx in cachesims
+  std::vector<Bucket> buckets_; //
+  std::vector<int> ds_nums_;    // all datastructs that are included
 
   void move_markers(int);
+  void move_markers2(int);
   void on_next_bucket_gets_active();
 };
 

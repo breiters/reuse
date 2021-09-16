@@ -8,6 +8,7 @@ typedef void *Addr;
 
 class Datastruct {
 public:
+  Datastruct() : address{(void *)0x0}, nbytes{0UL}, col{0}, line{0} {};
   void *address;
   size_t nbytes;
   int col;
@@ -16,7 +17,6 @@ public:
   // bool is_active;
   std::string allocator;
   std::string file_name;
-  // std::vector<int> contained_in;
 
   /*
     inline void print(void) {

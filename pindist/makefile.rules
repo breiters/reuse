@@ -1,9 +1,8 @@
 CXX           := g++
 TOOL_ROOTS    := pindist pintrace
-TOOL_CXXFLAGS += -std=c++14
+TOOL_CXXFLAGS += -std=c++14 -latomic
 #TOOL_CXXFLAGS += -DNDEBUG
-#TOOL_CXXFLAGS += -march=native -mtune=native
-#TOOL_CXXFLAGS += -DDEBUG_LEVEL=1
+TOOL_CXXFLAGS += -march=native -mtune=native
 #TOOL_CXXFLAGS += -g -fno-inline
 
 CXXFLAGS=-O3 -fomit-frame-pointer -fno-strict-aliasing -std=c++11
@@ -36,6 +35,9 @@ $(OBJDIR)memoryblock$(OBJ_SUFFIX): memoryblock.cpp memoryblock.h
 $(OBJDIR)imgload$(OBJ_SUFFIX): imgload.cpp imgload.h
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
+$(OBJDIR)rrlock$(OBJ_SUFFIX): rrlock.cpp rrlock.h
+	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+
 # ================================================================
 # Build the pindist tool as a dll (shared object).
 # ================================================================
@@ -46,6 +48,7 @@ $(OBJDIR)pindist$(PINTOOL_SUFFIX): \
 		$(OBJDIR)pindist$(OBJ_SUFFIX) \
 		$(OBJDIR)bucket$(OBJ_SUFFIX) \
 		$(OBJDIR)region$(OBJ_SUFFIX) \
+		$(OBJDIR)rrlock$(OBJ_SUFFIX) \
 		$(OBJDIR)imgload$(OBJ_SUFFIX) \
 		$(OBJDIR)memoryblock$(OBJ_SUFFIX)
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)

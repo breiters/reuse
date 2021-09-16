@@ -1,6 +1,7 @@
 #include "region.h"
 #include "bucket.h"
 #include "cachesim.h"
+#include "pin.H"
 #include "datastructs.h"
 #include <cassert>
 #include <cstring>

@@ -2,7 +2,7 @@
 
 #include <cstdio>
 #include <list>
-#include "debug.h"
+#include "dist.h"
 
 // use minimal memory block element? Prohibits consistency checks
 #define MIN_BLOCKSTRUCT 1

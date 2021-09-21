@@ -8,7 +8,6 @@
 #include "dist.h"
 #include "pin.H"
 #include "region.h"
-// #include "rrlock.h"
 
 #include <iostream>
 #include <string>
@@ -17,7 +16,6 @@
 std::string g_application_name;
 extern void on_exit_main();
 extern PIN_RWMUTEX g_rwlock;
-extern RRlock rrlock;
 
 void handle_datastruct(ADDRINT returnIp, Datastruct &ds) {
   
@@ -33,7 +31,6 @@ void handle_datastruct(ADDRINT returnIp, Datastruct &ds) {
     // info.print();
   }
   PIN_RWMutexUnlock(&g_rwlock);
-  rrlock.unlock_if_hold();
 }
 
 //  Replace an original function with a custom function defined in the tool
@@ -119,7 +116,6 @@ INT32 NewPosixMemalign(fp_posix_memalign orgFuncptr, VOID **memptr, UINT64 arg0,
 typedef void (*fp_pindist_start_stop)(char *);
 VOID PINDIST_start_region_(char *region) {
 #if RD_REGIONS
-
   PIN_RWMutexWriteLock(&g_rwlock);
 
   auto reg = g_regions.find(region);
@@ -132,9 +128,7 @@ VOID PINDIST_start_region_(char *region) {
   }
 
   PIN_RWMutexUnlock(&g_rwlock);
-  rrlock.unlock_if_hold();
-
-#endif
+#endif /* RD_REGIONS */
 }
 
 VOID New_PINDIST_start_region(fp_pindist_start_stop orgFuncptr, char *region, ADDRINT returnIp) {
@@ -143,7 +137,6 @@ VOID New_PINDIST_start_region(fp_pindist_start_stop orgFuncptr, char *region, AD
 
 VOID PINDIST_stop_region_(char *region) {
 #if RD_REGIONS
-
   PIN_RWMutexWriteLock(&g_rwlock);
 
   auto reg = g_regions.find(region);
@@ -153,8 +146,7 @@ VOID PINDIST_stop_region_(char *region) {
   }
 
   PIN_RWMutexUnlock(&g_rwlock);
-
-#endif
+#endif /* RD_REGIONS */
 }
 
 VOID New_PINDIST_stop_region(fp_pindist_start_stop orgFuncptr, char *region, ADDRINT returnIp) {

@@ -1,8 +1,8 @@
 #include "region.h"
 #include "bucket.h"
 #include "cachesim.h"
-#include "pin.H"
 #include "datastructs.h"
+#include "pin.H"
 #include <cassert>
 #include <cstring>
 #include <cxxabi.h>
@@ -10,9 +10,8 @@
 
 std::unordered_map<char *, Region *> g_regions;
 
-Region::Region(char *region) : region_{strdup(region)} {
-  // add region buckets for every CacheSim
-  // init with zero
+Region::Region(char *region) : region_{strdup(region)}, count_{0} {
+  // add region buckets for every CacheSim, init with zero
   size_t num_cachesims = g_cachesims.size();
 
   buckets_.reserve(num_cachesims);
@@ -31,8 +30,13 @@ Region::~Region() {
 }
 
 void Region::on_region_entry() {
-  // std::cout << "entry region: " << region_ << "\n";
   // make snapshot of current buckets access counts
+  count_++;
+  if (count_ > 1) {
+    return;
+  }
+  // std::cout << "entry region: " << region_ << "\n";
+
   size_t cs_num = 0;
   for (auto &cs : g_cachesims) {
     buckets_entry_[cs_num] = cs->buckets();
@@ -41,7 +45,12 @@ void Region::on_region_entry() {
 }
 
 void Region::on_region_exit() {
+  count_--;
+  if (count_ > 0) {
+    return;
+  }
   // std::cout << "exit region: " << region_ << "\n";
+
   size_t cs_num = 0;
   for (auto &cs : g_cachesims) {
     size_t b = 0;
@@ -58,6 +67,7 @@ void Region::register_datastruct() {
   buckets_entry_.push_back(std::vector<Bucket>{Bucket::mins.size()});
 }
 
+/** TODO: there is also a more portable pin function for this **/
 void Region::demangle_name() {
   int status = -1;
   char *demangled_name = abi::__cxa_demangle(region_, NULL, NULL, &status);

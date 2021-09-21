@@ -2,7 +2,6 @@
 
 #include "bucket.h"
 #include "memoryblock.h"
-#include "rrlock.h"
 #include <list>
 #include <unordered_map>
 #include <vector>
@@ -29,9 +28,8 @@ public:
     StackIterator it = stack_.begin();
     return it;
   }
+
   inline std::vector<Bucket> &buckets() { return buckets_; }
-  // inline RRlock &lock() { return lock_; }
-  inline PIN_MUTEX &mutex() { return mtx_; }
 
   // inline const std::list<MemoryBlock> &stack() const { return stack_; }
   // inline int cs_num() const { return cs_num_; }
@@ -63,8 +61,7 @@ public:
 private:
   int next_bucket_; //
   int cs_num_;      // idx in cachesims
-  // RRlock lock_;
-  PIN_MUTEX mtx_;
+  
   std::list<MemoryBlock> stack_; // Stack structure with MemoryBlock as element
   std::vector<Bucket> buckets_;  //
   std::vector<int> ds_nums_;     // all datastructs that are included

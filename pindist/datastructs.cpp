@@ -62,43 +62,9 @@ std::vector<Datastruct> Datastruct::datastructs;
   }
 }
 
-#if OLD_CODE
-/** combine 1 level (pairs) TODO: combine N levels? do not use small datastructs **/
-[[maybe_unused]] void Datastruct::combine(int ds_idx, [[maybe_unused]] int level) {
-
-  /*
-    if (datastructs[ds_idx].nbytes < RD_COMBINE_THRESHOLD) {
-      return;
-    } */
-
-  int ds_idx_other = 0;
-  for ([[maybe_unused]] auto &ds : Datastruct::datastructs) {
-
-    if (ds_idx != ds_idx_other /* && ds.nbytes > RD_COMBINE_THRESHOLD */) {
-
-      g_cachesims.push_back(new CacheSim{});
-
-      int cs_idx = static_cast<int>(g_cachesims.size() - 1);
-
-      indices_of[ds_idx].push_back(cs_idx);
-      indices_of[ds_idx_other].push_back(cs_idx);
-
-      g_cachesims.back()->add_datastruct(ds_idx);
-      g_cachesims.back()->add_datastruct(ds_idx_other);
-
-      for (auto &key_value : g_regions) {
-        key_value.second->register_datastruct();
-      }
-
-      ds_idx_other++;
-    }
-  }
-}
-#endif
-
 void Datastruct::register_datastruct(Datastruct &info) {
 #if RD_DATASTRUCTS
-  if (info.nbytes < RD_COMBINE_THRESHOLD) {
+  if (info.nbytes < RD_DATASTRUCT_THRESHOLD) {
     printf("datastruct too small\n");
     return;
   }
@@ -127,7 +93,7 @@ void Datastruct::register_datastruct(Datastruct &info) {
 #endif /* RD_DATASTRUCTS */
 }
 
-/** TODO: maybe use better algorithm to get datastruct **/
+/** TODO: maybe use better algorithm to get datastruct (sort datastructs by address) **/
 int Datastruct::datastruct_num(Addr addr) {
   int i = 0;
   for (auto &ds : Datastruct::datastructs) {

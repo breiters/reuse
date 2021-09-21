@@ -5,11 +5,11 @@
 #include <vector>
 
 #include "bucket.h"
-#include "cachesim.h"
 
 class Region {
 public:
   char *region_;
+  unsigned count_;
 
   std::vector<std::vector<Bucket>> buckets_;
   std::vector<std::vector<Bucket>> buckets_entry_;

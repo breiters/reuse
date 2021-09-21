@@ -7,12 +7,15 @@
 
 class Bucket {
 public:
-  Bucket();
+  Bucket() : aCount{0}, aCount_excl{0} {}
   unsigned long aCount;
   unsigned long aCount_excl;
   StackIterator marker;
 
   static std::vector<unsigned> mins;
 
-  void add_sub(const Bucket &addend, const Bucket &minuend);
+  inline void add_sub(const Bucket &add, const Bucket &sub) {
+    aCount += add.aCount - sub.aCount;
+    aCount_excl += add.aCount_excl - sub.aCount_excl;
+  }
 };

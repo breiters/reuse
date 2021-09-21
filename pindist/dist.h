@@ -6,8 +6,9 @@
 
 #pragma once
 
-#include "memoryblock.h"
-#include <vector>
+#include <cstdio>
+// #include "memoryblock.h"
+// #include <vector>
 
 typedef void* Addr;
 
@@ -24,14 +25,23 @@ typedef void* Addr;
 // Print only up to N-th marker in debug output
 #define RD_PRINT_MARKER_MAX 1
 
-// Simulate isolated datastructs
+// Simulate isolated datastructs?
 #define RD_DATASTRUCTS 1
+
+// Do not account for zero distance accesses?
+#define RD_DO_NOT_COUNT_ZERO_DISTANCE 1
 
 // Also simulate "combined" isolated datastructs? (only active if RD_DATASTRUCTS > 0)
 #define RD_COMBINED_DATASTRUCTS 1
-#define RD_COMBINE_THRESHOLD 32000
+#define RD_DATASTRUCT_THRESHOLD 8000
+#define RD_COMBINE_THRESHOLD 16000
 
 #define RD_REGIONS 1
+
+#define RD_PARALLEL 1
+#define RD_ROUND_ROBIN 1
+
+#define MAX_THREADS 12
 
 #if !(RD_DEBUG)
 // #define NDEBUG
@@ -42,6 +52,8 @@ typedef void* Addr;
 #else
 #define eprintf(...)
 #endif
+
+extern bool g_main_exit;
 
 // initialize / clear used structs
 void RD_init();

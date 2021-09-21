@@ -15,8 +15,7 @@ typedef void *Addr;
 class MemoryBlock {
 public:
   // MemoryBlock(Addr a); // generated on first access
-  MemoryBlock() : ds_num{-1} {}
-  MemoryBlock(Addr a, int num);
+  MemoryBlock(Addr a, int num) : bucket{0}, ds_num{num}, a{a} {}
 
   inline void print() {
     eprintf("addr: %p, bucket: %d, ds_num: %d\n", a, bucket, ds_num);

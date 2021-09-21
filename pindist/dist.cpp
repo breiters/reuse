@@ -26,10 +26,8 @@ using std::string;
 using std::unordered_map;
 using std::vector;
 
+extern unsigned g_max_threads;
 extern string g_application_name;
-extern RRlock rrlock;
-
-#define RRLOCK 1
 
 // make sure that memblocks are powers of two
 static constexpr bool is_pow2(int a) { return !(a & (a - 1)); }
@@ -50,10 +48,10 @@ static constexpr int first_set = ffs_constexpr(MEMBLOCKLEN);
 struct S {}; // dummy class to provide custom hash object
 namespace std {
 template <> struct hash<S> {
-  std::size_t operator()(Addr const &s) const noexcept {
+  size_t operator()(Addr const &s) const noexcept {
     // last n bits of Addr s are all zero
     // => avoid collisions having keys that are all multiples of MEMBLOCKLEN
-    return std::hash<Addr>{}((Addr)(((uint64_t)s) >> first_set));
+    return hash<Addr>{}((Addr)(((uintptr_t)s) >> first_set));
   }
 };
 } // namespace std
@@ -65,32 +63,20 @@ template <> struct hash<S> {
 using AddrMap = std::unordered_map<Addr, vector<StackIterator>, std::hash<S>>;
 AddrMap g_addrMap;
 
-#define MAX_THREADS 12
-[[maybe_unused]] Addr addr_last_arr[MAX_THREADS] = {0};
-
 [[maybe_unused]] static void on_accessed_before(Addr addr) {
   // for all caches where ds_num is included:
   // increment bucket 0 access count
   // and bucket 0 exclusive access count
 
-  // global cache
-  // rrlock.lock();
-  // g_cachesims[0]->incr_access(0);
-  // int ds_num = g_cachesims[0]->stack_begin()->ds_num;
-  // rrlock.unlock();
-
   int ds_num = Datastruct::datastruct_num(addr);
-  rrlock.tick();
 
 #if RD_DATASTRUCTS
   if (ds_num != RD_NO_DATASTRUCT) {
     for (int idx : Datastruct::indices_of[ds_num]) {
-      // PIN_MutexLock(&g_cachesims[idx]->mutex());
       assert(idx != 0);
       assert(g_cachesims[idx]->contains(ds_num));
       g_cachesims[idx]->incr_access(0);
       g_cachesims[idx]->incr_access_excl(0);
-      // PIN_MutexUnlock(&g_cachesims[idx]->mutex());
     }
   }
 #endif /* RD_DATASTRUCTS */
@@ -119,62 +105,23 @@ static void on_block_new(Addr addr) {
   iterators.push_back(it);
   g_cachesims[0]->incr_access_inf();
 
-/*
-#if RRLOCK
-  rrlock.unlock();
-#else
-  PIN_MutexUnlock(&g_cachesims[0]->mutex());
-#endif
-*/
-
   eprintf("new block: ");
   mb.print();
 
-
 #if RD_DATASTRUCTS
   if (ds_num != RD_NO_DATASTRUCT) {
-    /*
     // account for access to combined dastructs
     for (int idx : Datastruct::indices_of[ds_num]) {
-      PIN_MutexLock(&g_cachesims[idx]->mutex());
       assert(idx != 0);
       assert(g_cachesims[idx]->contains(ds_num));
       iterators.push_back(g_cachesims[idx]->on_block_new(mb));
       g_cachesims[idx]->incr_access_inf();
       g_cachesims[idx]->incr_access_excl_inf();
-      PIN_MutexUnlock(&g_cachesims[idx]->mutex());
-    }
-*/
-
-    int done[Datastruct::indices_of[ds_num].size()] = {0};
-    bool all_done = false;
-    while (!all_done) {
-      int d = 0;
-      all_done = true;
-      for (int idx : Datastruct::indices_of[ds_num]) {
-        if (!done[d]) {
-          if (!PIN_MutexTryLock(&g_cachesims[idx]->mutex())) {
-            all_done = false;
-            continue;
-          }
-          assert(idx != 0);
-          assert(g_cachesims[idx]->contains(ds_num));
-          iterators.push_back(g_cachesims[idx]->on_block_new(mb));
-          g_cachesims[idx]->incr_access_inf();
-          g_cachesims[idx]->incr_access_excl_inf();
-          PIN_MutexUnlock(&g_cachesims[idx]->mutex());
-        }
-        d++;
-      }
-      // PIN_Yield();
     }
   }
 #endif /* RD_DATASTRUCTS */
 
-  // PIN_MutexLock(&g_cachesims[0]->mutex());
   g_addrMap[addr] = iterators;
-  // PIN_MutexUnlock(&g_cachesims[0]->mutex());
-  // rrlock.unlock();
 
 #if USE_OLD_CODE
   if (RD_VERBOSE > 1)
@@ -182,13 +129,14 @@ static void on_block_new(Addr addr) {
 
   if (RD_VERBOSE > 0)
     fprintf(stderr, " ACTIVATE bucket %d (next bucket minimum depth %d)\n", g_nextBucket,
-            g_buckets[g_nextBucket + 1].min);
+            buckets[g_nextBucket + 1].min);
 #endif
 }
 
 static void on_block_seen(AddrMap::iterator &it) {
   eprintf("%s\n", __func__);
   // memory block already seen - get iterators in stacks
+
   auto iterators = it->second;
 
   eprintf("restored iterator: ");
@@ -198,71 +146,39 @@ static void on_block_seen(AddrMap::iterator &it) {
   g_cachesims[0]->incr_access(global_bucket);
   int ds_num = iterators[0]->ds_num;
 
-/*
-#if RRLOCK
-  rrlock.unlock();
-#else
-  PIN_MutexUnlock(&g_cachesims[0]->mutex());
-#endif
-*/
-
-
 #if RD_DATASTRUCTS
   if (ds_num != RD_NO_DATASTRUCT) {
     int it_idx = 1; // iterator 0 is for global stack so start with 1
-    int done[Datastruct::indices_of[ds_num].size()] = {0};
-    bool all_done = false;
-    while (!all_done) {
-      int d = 0;
-      all_done = true;
-      for (int idx : Datastruct::indices_of[ds_num]) {
-        if (!done[d]) {
-          if (!PIN_MutexTryLock(&g_cachesims[idx]->mutex())) {
-            all_done = false;
-            continue;
-          }
-          // PIN_MutexLock(&g_cachesims[idx]->mutex());
-          assert(idx != 0);
-          assert(g_cachesims[idx]->contains(ds_num));
-          assert(iterators.size() == Datastruct::indices_of[ds_num].size() + 1);
+    for (int idx : Datastruct::indices_of[ds_num]) {
+      assert(idx != 0);
+      assert(g_cachesims[idx]->contains(ds_num));
+      assert(iterators.size() == Datastruct::indices_of[ds_num].size() + 1);
 
-          int csc_bucket = g_cachesims[idx]->on_block_seen(iterators[it_idx]);
-          g_cachesims[idx]->incr_access(global_bucket);
-          g_cachesims[idx]->incr_access_excl(csc_bucket);
-          it_idx++;
-          done[d] = true;
-          PIN_MutexUnlock(&g_cachesims[idx]->mutex());
-        }
-        d++;
-      }
-      // PIN_Yield();
+      int csc_bucket = g_cachesims[idx]->on_block_seen(iterators[it_idx]);
+      g_cachesims[idx]->incr_access(global_bucket);
+      g_cachesims[idx]->incr_access_excl(csc_bucket);
+      it_idx++;
     }
   }
 #endif /* RD_DATASTRUCTS */
 }
 
+unsigned long abefore_cnt = 0;
+
 void RD_accessBlock(Addr addr) {
   eprintf("%s\n", __func__);
   // [[maybe_unused]] static Addr addr_last;
-  // [[maybe_unused]] static Addr addr_last_arr[MAX_THREADS] = {0};
-  // [[maybe_unused]] Addr addr_last = addr_last_arr[PIN_ThreadId()];
 
+  static Addr addr_last_arr[MAX_THREADS] = {0};
   bool accessed_before = (addr == addr_last_arr[PIN_ThreadId()]);
 
   if (accessed_before) {
-    // rrlock.tick();
-
-    // on_accessed_before(addr);
+    abefore_cnt++;
     // assert(g_cachesims[0]->stack_begin() == g_addrMap.find(addr)->second[0]);
+    // on_accessed_before(addr);
   } else {
-    // PIN_MutexLock(&g_cachesims[0]->mutex());
     auto it = g_addrMap.find(addr);
-    /*
-#if RRLOCK
-    PIN_MutexUnlock(&g_cachesims[0]->mutex());
-    rrlock.lock();
-#endif
-*/
+
     if (it == g_addrMap.end()) {
       on_block_new(addr);
     } else {
@@ -285,8 +201,6 @@ static void free_memory() {
   }
 }
 
-extern unsigned g_max_threads;
-
 void RD_print_csv() {
   const char *csv_header = "region,datastruct,addr,nbytes,line,ds_total_access_count,file_name,min,"
                            "access_count,access_exclusive,threads\n";
@@ -299,7 +213,7 @@ void RD_print_csv() {
   FILE *csv_out = fopen(csv_filename, "w");
   fprintf(csv_out, "%s", csv_header);
 
-  printf("printing\n");
+  printf("bla: %lu\n", abefore_cnt);
 
   for (auto &cs : g_cachesims) {
     cs->print_csv(csv_out, "main");
@@ -315,7 +229,7 @@ void RD_print_csv() {
 
 void RD_init() {
   g_addrMap.clear();
-  // global cache
+  // global cache simulation
   g_cachesims.push_back(new CacheSim{});
 }
 
@@ -492,8 +406,8 @@ public:
 //-------------------------------------------------------------------------
 #endif
 
-#if 0
-/** done in CacheSim::check_consistency **/
+#if OLD_CODE
+/** done in CacheSim::check_consistency() **/
 
 // do an internal consistency check
 void RD_checkConsistency() {
@@ -501,23 +415,23 @@ void RD_checkConsistency() {
   unsigned int d = 0;
   int b = 0;
   aCount1 = 0;
-  aCount2 = g_buckets[0].aCount;
+  aCount2 = buckets[0].aCount;
 
   if (RD_VERBOSE > 0) {
     fprintf(stderr, "\nChecking... (stack size: %lu)\n", g_stack.size());
     fprintf(stderr, "   START Bucket %d (min depth %u): aCount %lu\n", b,
-            g_buckets[b].min, g_buckets[b].aCount);
+            buckets[b].min, buckets[b].aCount);
   }
 
   StackIterator stackIt;
   for (stackIt = g_stack.begin(); stackIt != g_stack.end(); ++stackIt, ++d) {
-    if (d == g_buckets[b + 1].min) {
+    if (d == buckets[b + 1].min) {
       b++;
-      aCount2 += g_buckets[b].aCount;
+      aCount2 += buckets[b].aCount;
       if (RD_VERBOSE > 0)
         fprintf(stderr, "   START Bucket %d (min depth %u): aCount %lu\n", b,
-                g_buckets[b].min, g_buckets[b].aCount);
-      assert(stackIt == g_buckets[b].marker);
+                buckets[b].min, buckets[b].aCount);
+      assert(stackIt == buckets[b].marker);
     }
 
     if (RD_VERBOSE > 1) {
@@ -529,16 +443,16 @@ void RD_checkConsistency() {
     assert(stackIt->bucket == b);
   }
   assert(g_nextBucket = b + 1);
-  b = g_buckets.size() - 1;
-  aCount2 += g_buckets[b].aCount;
+  b = buckets.size() - 1;
+  aCount2 += buckets[b].aCount;
   if (RD_VERBOSE > 0) {
-    fprintf(stderr, "   Last Bucket %d: aCount %lu\n", b, g_buckets[b].aCount);
+    fprintf(stderr, "   Last Bucket %d: aCount %lu\n", b, buckets[b].aCount);
     fprintf(stderr, "   Total aCount: %u\n", aCount1);
   }
 #if MIN_BLOCKSTRUCT
-  assert(g_buckets[b].aCount == g_stack.size());
+  assert(buckets[b].aCount == g_stack.size());
 #else
-  assert(g_buckets[b].aCount == stack.size());
+  assert(buckets[b].aCount == stack.size());
   assert(aCount1 == aCount2);
 #endif
 }

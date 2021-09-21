@@ -1,8 +1,7 @@
 CXX           := g++
 TOOL_ROOTS    := pindist pintrace
 TOOL_CXXFLAGS += -std=c++14 -latomic
-#TOOL_CXXFLAGS += -DNDEBUG
-TOOL_CXXFLAGS += -march=native -mtune=native
+TOOL_CXXFLAGS += -DNDEBUG
 #TOOL_CXXFLAGS += -g -fno-inline
 
 CXXFLAGS=-O3 -fomit-frame-pointer -fno-strict-aliasing -std=c++11
@@ -29,9 +28,6 @@ $(OBJDIR)bucket$(OBJ_SUFFIX): bucket.cpp bucket.h
 $(OBJDIR)region$(OBJ_SUFFIX): region.cpp region.h
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
-$(OBJDIR)memoryblock$(OBJ_SUFFIX): memoryblock.cpp memoryblock.h
-	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
-
 $(OBJDIR)imgload$(OBJ_SUFFIX): imgload.cpp imgload.h
 	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
@@ -49,8 +45,7 @@ $(OBJDIR)pindist$(PINTOOL_SUFFIX): \
 		$(OBJDIR)bucket$(OBJ_SUFFIX) \
 		$(OBJDIR)region$(OBJ_SUFFIX) \
 		$(OBJDIR)rrlock$(OBJ_SUFFIX) \
-		$(OBJDIR)imgload$(OBJ_SUFFIX) \
-		$(OBJDIR)memoryblock$(OBJ_SUFFIX)
+		$(OBJDIR)imgload$(OBJ_SUFFIX)
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 

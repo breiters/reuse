@@ -8,19 +8,15 @@
 #include <cassert>
 
 /**
- * can NOT use std::vector<CacheSim> here because PIN stl somehow invalidates the list iterators of existing elements
- * when pushing new CacheSim
+ * can NOT use std::vector<CacheSim> here because PIN C++ stl somehow invalidates the list iterators of existing
+ * elements when pushing new CacheSim to a vector
  */
 std::vector<CacheSim *> g_cachesims; // LRU stack objects
 
-// size_t CacheSim::num_cs;
-
 CacheSim::CacheSim()
-    : next_bucket_{1}, cs_num_{static_cast<int>(g_cachesims.size())}, buckets_{
-                                                                          std::vector<Bucket>{Bucket::mins.size()}} {
-  PIN_MutexInit(&mtx_);
-  eprintf("add new cache simulator - num : %d\n", cs_num_);
-}
+    : next_bucket_{1}, 
+    cs_num_{static_cast<int>(g_cachesims.size())}, 
+    buckets_{std::vector<Bucket>{Bucket::mins.size()}} { eprintf("add new cache sim - num : %d\n", cs_num_); }
 
 void CacheSim::on_next_bucket_gets_active() {
   // eprintf("\n%s\n", __func__);
@@ -38,7 +34,7 @@ void CacheSim::on_next_bucket_gets_active() {
   for (unsigned i = 0; i < Bucket::mins[next_bucket_]; i++)
     it++;
   assert(it == buckets_[next_bucket_].marker);
-#endif
+#endif /* RD_DEBUG */
 
   // last stack element is now in the next higher bucket
   (buckets_[next_bucket_].marker)->bucket++;
@@ -47,6 +43,9 @@ void CacheSim::on_next_bucket_gets_active() {
 
   next_bucket_++;
 
+#if RD_DEBUG
+  check_consistency();
+#endif /* RD_DEBUG */
   print_stack();
 }
 
@@ -71,7 +70,9 @@ StackIterator CacheSim::on_block_new(const MemoryBlock &mb) {
     on_next_bucket_gets_active();
   }
 
+#if RD_DEBUG > 1
   check_consistency();
+#endif /* RD_DEBUG */
 
   return stack_.begin();
 }
@@ -90,8 +91,8 @@ int CacheSim::on_block_seen(StackIterator &blockIt) {
   }
 
   eprintf("block was not on top... moving block to top of stack\n");
-
   blockIt->print();
+
   // move all markers below current memory blocks bucket
   int bucket = blockIt->bucket;
 
@@ -106,7 +107,9 @@ int CacheSim::on_block_seen(StackIterator &blockIt) {
   // bucket of blockIt is zero now because it is on top of stack
   blockIt->bucket = 0;
 
+#if RD_DEBUG > 1
   check_consistency();
+#endif /* RD_DEBUG */
 
   return bucket;
 }
@@ -117,13 +120,14 @@ int CacheSim::on_block_seen(StackIterator &blockIt) {
  * - distance of bucket marker to stack begin must be equal to the min distance for the bucket
  */
 void CacheSim::check_consistency() {
-#if RD_DEBUG > 1
+  #if RD_DEBUG
   constexpr size_t DO_CHECK = 100000;
   static size_t iter = 0;
   iter++;
   if (iter < DO_CHECK) {
     return;
   }
+  iter = 0;
   auto it_start = stack_.begin();
   for (int b = 1; b < next_bucket_; b++) {
     unsigned distance = 0;
@@ -133,7 +137,7 @@ void CacheSim::check_consistency() {
     }
     assert(distance == Bucket::mins[b]);
   }
-#endif
+  #endif /* RD_DEBUG */
 }
 
 void CacheSim::move_markers(int topBucket) {
@@ -155,11 +159,9 @@ bool CacheSim::contains(int ds_num) const {
   return std::find(ds_nums_.begin(), ds_nums_.end(), ds_num) != ds_nums_.end();
 }
 
-/*
- *********************************************
+/**********************************************
  *     CSV output functions
- *********************************************
- */
+ **********************************************/
 
 #define CSV_TRAIL "%p,%zu,%d,%lu,%s,%u,%lu,%lu,%u\n"
 #define CSV_FORMAT "%s,%d," CSV_TRAIL

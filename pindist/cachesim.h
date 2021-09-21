@@ -43,7 +43,7 @@ public:
   inline void print_stack() {
 #if (RD_DEBUG && (RD_VERBOSE > 1))
     eprintf("\nstack:\n");
-    int m = 0;
+    int m = 1;
     StackIterator marker = buckets_[m].marker;
     for (auto it = stack_.begin(); it != stack_.end(); it++) {
       it->print();

@@ -33,8 +33,8 @@ typedef void* Addr;
 
 // Also simulate "combined" isolated datastructs? (only active if RD_DATASTRUCTS > 0)
 #define RD_COMBINED_DATASTRUCTS 1
-#define RD_DATASTRUCT_THRESHOLD 8000
-#define RD_COMBINE_THRESHOLD 16000
+#define RD_DATASTRUCT_THRESHOLD 16000
+#define RD_COMBINE_THRESHOLD 400000
 
 #define RD_REGIONS 1
 

@@ -16,7 +16,10 @@ std::vector<CacheSim *> g_cachesims; // LRU stack objects
 CacheSim::CacheSim()
     : next_bucket_{1}, 
     cs_num_{static_cast<int>(g_cachesims.size())}, 
-    buckets_{std::vector<Bucket>{Bucket::mins.size()}} { eprintf("add new cache sim - num : %d\n", cs_num_); }
+    buckets_{std::vector<Bucket>{Bucket::mins.size()}} { 
+      for(auto &b : buckets_) b.marker = stack_.end();
+      eprintf("add new cache sim - num : %d\n", cs_num_); 
+      }
 
 void CacheSim::on_next_bucket_gets_active() {
   // eprintf("\n%s\n", __func__);
@@ -28,6 +31,8 @@ void CacheSim::on_next_bucket_gets_active() {
 
   eprintf("marker now on:");
   buckets_[next_bucket_].marker->print();
+
+  // exit(1);
 
 #if RD_DEBUG
   StackIterator it = stack_.begin();
@@ -121,7 +126,7 @@ int CacheSim::on_block_seen(StackIterator &blockIt) {
  */
 void CacheSim::check_consistency() {
   #if RD_DEBUG
-  constexpr size_t DO_CHECK = 100000;
+  constexpr size_t DO_CHECK = 10;
   static size_t iter = 0;
   iter++;
   if (iter < DO_CHECK) {

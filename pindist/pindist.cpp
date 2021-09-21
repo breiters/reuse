@@ -319,6 +319,8 @@ int main(int argc, char *argv[]) {
   int L2_capacity_per_way = 8 * MiB / 16;
 
   Bucket::mins.push_back(0);
+  Bucket::mins.push_back(4);
+  Bucket::mins.push_back(12);
 
 #define RD_HISTOGRAM 0
 #define RD_MIN_BUCKETS 1

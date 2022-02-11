@@ -8,7 +8,7 @@
 
 class CacheSim {
 public:
-  CacheSim();
+  CacheSim(int complement);
   // ~CacheSim() {};
 
   StackIterator on_block_new(const MemoryBlock &mb);
@@ -40,6 +40,8 @@ public:
 
   // static std::vector<CacheSim> cachesims;
 
+  inline int is_complement() const { return complement_; };
+
   inline void print_stack() {
 #if (RD_DEBUG && (RD_VERBOSE > 1))
     eprintf("\nstack:\n");
@@ -60,6 +62,7 @@ public:
 
 private:
   int next_bucket_; //
+  int complement_;
   int cs_num_;      // idx in cachesims
   
   std::list<MemoryBlock> stack_; // Stack structure with MemoryBlock as element
@@ -72,21 +75,3 @@ private:
 };
 
 extern std::vector<CacheSim *> g_cachesims; // LRU stack objects
-
-#if NEED_HASHMAP
-namespace std {
-template <> struct hash<CacheSim> {
-  std::size_t operator()(CacheSim const &cs) const noexcept {
-    size_t hash = std::hash<int>{}(cs.ds_num());
-    int shift = 0;
-    for (int x : cs.ds_nums()) {
-      hash >>= shift++;
-      hash ^= std::hash<int>{}(x) << shift;
-    }
-    return hash;
-
-    return std::hash<int>{}(cs.ds_num());
-  }
-};
-} // namespace std
-#endif

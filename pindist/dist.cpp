@@ -68,7 +68,7 @@ AddrMap g_addrMap;
   // increment bucket 0 access count
   // and bucket 0 exclusive access count
 
-  int ds_num = Datastruct::datastruct_num(addr);
+  [[maybe_unused]] int ds_num = Datastruct::datastruct_num(addr);
 
 #if RD_DATASTRUCTS
   if (ds_num != RD_NO_DATASTRUCT) {
@@ -87,7 +87,7 @@ static void on_block_new(Addr addr) {
   eprintf("%s\n", __func__);
   // memory block not seen yet
   //
-  // for all caches where ds_num is included:
+  // for all stacks where ds_num is included:
   // increment bucket inf access count (done in CacheSim::on_block_new)
   // and bucket inf exclusive access count (done in CacheSim::on_block_new)
   //
@@ -95,30 +95,33 @@ static void on_block_new(Addr addr) {
   // that move to next bucket
   //
   int ds_num = Datastruct::datastruct_num(addr);
+  // MemoryBlock mb{addr, ds_num};
   MemoryBlock mb = MemoryBlock{addr, ds_num};
-
   vector<StackIterator> iterators;
 
-  g_cachesims[0]->on_block_new(mb);
+#if 1
+  StackIterator it = g_cachesims[0]->on_block_new(mb);
+  // g_cachesims[0]->on_block_new(mb);
+  // StackIterator it = g_cachesims[0]->stack_begin();
 
-  StackIterator it = g_cachesims[0]->stack_begin();
   iterators.push_back(it);
   g_cachesims[0]->incr_access_inf();
+#endif
 
   eprintf("new block: ");
   mb.print();
 
 #if RD_DATASTRUCTS
-  if (ds_num != RD_NO_DATASTRUCT) {
     // account for access to combined dastructs
     for (int idx : Datastruct::indices_of[ds_num]) {
-      assert(idx != 0);
+      // do not count twice on global stack:
+      if(idx == RD_NO_DATASTRUCT && ds_num == RD_NO_DATASTRUCT) continue;
+
       assert(g_cachesims[idx]->contains(ds_num));
       iterators.push_back(g_cachesims[idx]->on_block_new(mb));
       g_cachesims[idx]->incr_access_inf();
       g_cachesims[idx]->incr_access_excl_inf();
     }
-  }
 #endif /* RD_DATASTRUCTS */
 
   g_addrMap[addr] = iterators;
@@ -137,29 +140,46 @@ static void on_block_seen(AddrMap::iterator &it) {
   eprintf("%s\n", __func__);
   // memory block already seen - get iterators in stacks
 
-  auto iterators = it->second;
+  auto &iterators = it->second;
 
   eprintf("restored iterator: ");
   iterators[0]->print();
 
   int global_bucket = g_cachesims[0]->on_block_seen(iterators[0]);
   g_cachesims[0]->incr_access(global_bucket);
-  int ds_num = iterators[0]->ds_num;
+
+  [[maybe_unused]] int ds_num = iterators[0]->ds_num;
 
 #if RD_DATASTRUCTS
-  if (ds_num != RD_NO_DATASTRUCT) {
     int it_idx = 1; // iterator 0 is for global stack so start with 1
     for (int idx : Datastruct::indices_of[ds_num]) {
-      assert(idx != 0);
-      assert(g_cachesims[idx]->contains(ds_num));
-      assert(iterators.size() == Datastruct::indices_of[ds_num].size() + 1);
+      
+      // do not count twice on global stack:
+      if(idx == RD_NO_DATASTRUCT && ds_num == RD_NO_DATASTRUCT) continue;
 
-      int csc_bucket = g_cachesims[idx]->on_block_seen(iterators[it_idx]);
-      g_cachesims[idx]->incr_access(global_bucket);
-      g_cachesims[idx]->incr_access_excl(csc_bucket);
+      assert(g_cachesims[idx]->contains(ds_num));
+      // assert(iterators.size() == Datastruct::indices_of[ds_num].size());
+      if(it_idx >= (int) iterators.size()) {
+        // add complement datastruct
+        // puts("now");
+        assert(g_cachesims[idx]->is_complement());
+        // printf("ds_num: %d idx: %d\n", ds_num, idx);
+        MemoryBlock mb = *iterators[0];
+        mb.bucket = 0;
+        StackIterator it = g_cachesims[idx]->on_block_new(mb);
+        iterators.push_back(it);
+        g_cachesims[idx]->incr_access_inf();
+        g_cachesims[idx]->incr_access_excl_inf();
+      }
+      else {
+      // assert(iterators.size() == Datastruct::indices_of[ds_num].size() + 1);
+
+        int csc_bucket = g_cachesims[idx]->on_block_seen(iterators[it_idx]);
+        g_cachesims[idx]->incr_access(global_bucket);
+        g_cachesims[idx]->incr_access_excl(csc_bucket);
+      }
       it_idx++;
     }
-  }
 #endif /* RD_DATASTRUCTS */
 }
 
@@ -203,7 +223,7 @@ static void free_memory() {
 
 void RD_print_csv() {
   const char *csv_header = "region,datastruct,addr,nbytes,line,ds_total_access_count,file_name,min,"
-                           "access_count,access_exclusive,threads\n";
+                           "access_count,access_exclusive,cs_num,complement,threads\n";
 
   // generate filename
   constexpr size_t FILENAME_SIZE = 256;
@@ -212,8 +232,6 @@ void RD_print_csv() {
 
   FILE *csv_out = fopen(csv_filename, "w");
   fprintf(csv_out, "%s", csv_header);
-
-  printf("bla: %lu\n", abefore_cnt);
 
   for (auto &cs : g_cachesims) {
     cs->print_csv(csv_out, "main");
@@ -230,7 +248,9 @@ void RD_print_csv() {
 void RD_init() {
   g_addrMap.clear();
   // global cache simulation
-  g_cachesims.push_back(new CacheSim{});
+  // g_cachesims.push_back(new CacheSim{});
+  Datastruct ds{};
+  Datastruct::register_datastruct(ds);
 }
 
 // get statistics

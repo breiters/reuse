@@ -105,7 +105,9 @@ static void memAccess(ADDRINT addr, UINT32 size) {
   addr_last_arr[PIN_ThreadId()] = a1;
 
   if (accessed_before) {
+#if RD_ROUND_ROBIN
     rrlock.tick();
+#endif /* RD_ROUND_ROBIN */
     return;
   }
 #endif
@@ -123,7 +125,7 @@ static void memAccess(ADDRINT addr, UINT32 size) {
 #if RD_ROUND_ROBIN
   rrlock.lock();
 #else
-  PIN_MutexLock(&g_mtx);
+  PIN_MutexLock(&mtx);
 #endif /* RD_ROUND_ROBIN */
   PIN_RWMutexReadLock(&g_rwlock);
   threads++;
@@ -155,7 +157,7 @@ static void memAccess(ADDRINT addr, UINT32 size) {
 #if RD_ROUND_ROBIN
   rrlock.unlock();
 #else
-  PIN_MutexUnlock(&g_mtx);
+  PIN_MutexUnlock(&mtx);
 #endif
 #endif
 }
@@ -319,10 +321,10 @@ int main(int argc, char *argv[]) {
   int L2_capacity_per_way = 8 * MiB / 16;
 
   Bucket::mins.push_back(0);
-  Bucket::mins.push_back(4);
-  Bucket::mins.push_back(12);
+  // Bucket::mins.push_back(4);
+  // Bucket::mins.push_back(12);
 
-#define RD_HISTOGRAM 0
+#define RD_HISTOGRAM 1
 #define RD_MIN_BUCKETS 1
 
 #if RD_HISTOGRAM
@@ -332,7 +334,7 @@ int main(int argc, char *argv[]) {
   Bucket::mins.push_back(MiB / 2 / MEMBLOCKLEN);
   for (int i = 1; i < 16; i += 2)
     Bucket::mins.push_back(L2_capacity_per_way * (i + 1) / MEMBLOCKLEN);
-  Bucket::mins.push_back(L2_capacity_per_way * 18 / MEMBLOCKLEN);
+  // Bucket::mins.push_back(L2_capacity_per_way * 18 / MEMBLOCKLEN);
 
 #else
   // Bucket::mins.push_back(KiB / MEMBLOCKLEN);

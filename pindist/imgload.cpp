@@ -18,7 +18,7 @@ extern void on_exit_main();
 extern PIN_RWMUTEX g_rwlock;
 
 void handle_datastruct(ADDRINT returnIp, Datastruct &ds) {
-  
+#if RD_DATASTRUCTS
   PIN_RWMutexWriteLock(&g_rwlock);
 
   PIN_LockClient();
@@ -31,6 +31,7 @@ void handle_datastruct(ADDRINT returnIp, Datastruct &ds) {
     // info.print();
   }
   PIN_RWMutexUnlock(&g_rwlock);
+#endif /* RD_DATASTRUCTS */
 }
 
 //  Replace an original function with a custom function defined in the tool
@@ -93,9 +94,6 @@ typedef int (*fp_posix_memalign)(void **, size_t, size_t);
 
 INT32 NewPosixMemalign(fp_posix_memalign orgFuncptr, VOID **memptr, UINT64 arg0, UINT64 arg1, ADDRINT returnIp) {
   Datastruct ds;
-
-  // printf("arg0: %lu arg1: %lu *memptr: %p\n", arg0, arg1, *memptr);
-  // printf("arg0: %lu arg1: %lu *memptr: %p\n", arg0, arg1, *memptr);
 
   // Call the relocated entry point of the original (replaced) routine.
   int ret = orgFuncptr(memptr, arg0, arg1);

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-enum DATASTRUCTS { RD_NO_DATASTRUCT = -1 };
+enum DATASTRUCTS { RD_NO_DATASTRUCT = 0 };
 typedef void *Addr;
 
 class Datastruct {

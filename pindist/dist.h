@@ -23,7 +23,7 @@ typedef void* Addr;
 #define RD_VERBOSE 0
 
 // Print only up to N-th marker in debug output
-#define RD_PRINT_MARKER_MAX 1
+#define RD_PRINT_MARKER_MAX 2
 
 // Simulate isolated datastructs?
 #define RD_DATASTRUCTS 1
@@ -33,19 +33,15 @@ typedef void* Addr;
 
 // Also simulate "combined" isolated datastructs? (only active if RD_DATASTRUCTS > 0)
 #define RD_COMBINED_DATASTRUCTS 1
-#define RD_DATASTRUCT_THRESHOLD 16000
-#define RD_COMBINE_THRESHOLD 400000
+#define RD_DATASTRUCT_THRESHOLD 5000
+#define RD_COMBINE_THRESHOLD 20000
 
 #define RD_REGIONS 1
 
 #define RD_PARALLEL 1
-#define RD_ROUND_ROBIN 1
+#define RD_ROUND_ROBIN 0
 
 #define MAX_THREADS 12
-
-#if !(RD_DEBUG)
-// #define NDEBUG
-#endif
 
 #if RD_VERBOSE
 #define eprintf(...) fprintf (stderr, __VA_ARGS__)

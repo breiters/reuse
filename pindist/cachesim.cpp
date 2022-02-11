@@ -13,13 +13,15 @@
  */
 std::vector<CacheSim *> g_cachesims; // LRU stack objects
 
-CacheSim::CacheSim()
+CacheSim::CacheSim(int complement)
     : next_bucket_{1}, 
+    complement_{complement},
     cs_num_{static_cast<int>(g_cachesims.size())}, 
-    buckets_{std::vector<Bucket>{Bucket::mins.size()}} { 
-      for(auto &b : buckets_) b.marker = stack_.end();
-      eprintf("add new cache sim - num : %d\n", cs_num_); 
-      }
+    buckets_{std::vector<Bucket>{Bucket::mins.size()}} 
+    { 
+      // for(auto &b : buckets_) b.marker = stack_.end();
+      // eprintf("add new cache sim - num : %d\n", cs_num_);
+    }
 
 void CacheSim::on_next_bucket_gets_active() {
   // eprintf("\n%s\n", __func__);
@@ -31,8 +33,6 @@ void CacheSim::on_next_bucket_gets_active() {
 
   eprintf("marker now on:");
   buckets_[next_bucket_].marker->print();
-
-  // exit(1);
 
 #if RD_DEBUG
   StackIterator it = stack_.begin();
@@ -62,7 +62,7 @@ void CacheSim::on_next_bucket_gets_active() {
  * @return The stack begin iterator
  */
 StackIterator CacheSim::on_block_new(const MemoryBlock &mb) {
-  // eprintf("\n%s\n", __func__);
+  eprintf("\n%s\n", __func__);
   stack_.push_front(mb);
 
   // print_stack();
@@ -78,7 +78,7 @@ StackIterator CacheSim::on_block_new(const MemoryBlock &mb) {
 #if RD_DEBUG > 1
   check_consistency();
 #endif /* RD_DEBUG */
-
+eprintf("\n%s\n", __func__);
   return stack_.begin();
 }
 
@@ -168,7 +168,7 @@ bool CacheSim::contains(int ds_num) const {
  *     CSV output functions
  **********************************************/
 
-#define CSV_TRAIL "%p,%zu,%d,%lu,%s,%u,%lu,%lu,%u\n"
+#define CSV_TRAIL "%p,%zu,%d,%lu,%s,%u,%lu,%lu,%d,%d,%u\n"
 #define CSV_FORMAT "%s,%d," CSV_TRAIL
 #define CSV_FORMAT2 "%s,%s," CSV_TRAIL
 
@@ -178,11 +178,11 @@ void CacheSim::print_csv(FILE *csv_out, const char *region) const { print_csv(cs
 
 void CacheSim::print_csv(FILE *csv_out, const char *region, const std::vector<Bucket> &buckets) const {
   // global address space accesses
-  if (ds_nums_.size() == 0) {
+  if (ds_nums_.size() == 1 && ds_nums_[0] == 0) {
     Datastruct ds{};
     for (size_t b = 0; b < buckets.size(); b++) {
       fprintf(csv_out, CSV_FORMAT, region, -1, (void *)0x0, 0UL, 0, 0UL, "main file", Bucket::mins[b],
-              buckets[b].aCount, buckets[b].aCount_excl, g_max_threads);
+              buckets[b].aCount, buckets[b].aCount_excl, cs_num_, complement_, g_max_threads);
     }
   }
   // single datastruct
@@ -190,10 +190,10 @@ void CacheSim::print_csv(FILE *csv_out, const char *region, const std::vector<Bu
     auto &ds = Datastruct::datastructs[ds_nums_[0]];
     for (size_t b = 0; b < buckets.size(); b++) {
       fprintf(csv_out, CSV_FORMAT, region, ds_nums_[0], ds.address, ds.nbytes, ds.line, ds.access_count,
-              ds.file_name.c_str(), Bucket::mins[b], buckets[b].aCount, buckets[b].aCount_excl, g_max_threads);
+              ds.file_name.c_str(), Bucket::mins[b], buckets[b].aCount, buckets[b].aCount_excl, cs_num_, complement_,  g_max_threads);
     }
   }
-  // is combined datastruct access
+  // combined datastruct
   else {
     size_t MAX_LEN = 512;
     char buf[MAX_LEN];
@@ -209,7 +209,7 @@ void CacheSim::print_csv(FILE *csv_out, const char *region, const std::vector<Bu
     buf[offset - 1] = '\0';
     for (size_t b = 0; b < buckets.size(); b++) {
       fprintf(csv_out, CSV_FORMAT2, region, buf, (void *)0x0, nbytes, 0, 0UL, " ", Bucket::mins[b], buckets[b].aCount,
-              buckets[b].aCount_excl, g_max_threads);
+              buckets[b].aCount_excl, cs_num_, complement_, g_max_threads);
     }
   }
 }
